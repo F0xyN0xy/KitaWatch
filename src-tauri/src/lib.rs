@@ -27,13 +27,21 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            // Ensure .env is loaded from resource dir early (Linux needs this for AniList secret)
+            if let Ok(res_dir) = app.path().resource_dir() {
+                config::load_with_resource_dir(&res_dir);
+            } else {
+                config::load();
+            }
+
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
-                 if let Err(e) = app.deep_link().register_all() {
+                if let Err(e) = app.deep_link().register_all() {
                     eprintln!("[kitawatch] warning: failed to register deep links: {e}");
+                    // Linux: deep-link registration needs a .desktop file; log but don't fail
+                    #[cfg(target_os = "linux")]
+                    eprintln!("[kitawatch] hint: on Linux the kitawatch:// scheme requires the .desktop file to be installed (deb does this automatically)");
                 }
-                app.deep_link().register_all()?;
             }
 
             // Debug spawns from source checkouts; release spawns the bundled

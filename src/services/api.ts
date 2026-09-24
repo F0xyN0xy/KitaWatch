@@ -12,7 +12,7 @@ import type {
 } from '@/types';
 
 /** The app always talks to its own bundled sidecars. */
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 
@@ -209,9 +209,13 @@ export const api = {
 
   // Collections
   spotlight: async (): Promise<SpotlightAnime[]> => {
-    const raw = await request<unknown[]>('/anime/spotlight');
-    const list = Array.isArray(raw) ? raw : [];
-    return list.map((s) => ({
+    const raw = await request<unknown[] | { results?: unknown[] } | { data?: unknown[] }>('/anime/spotlight');
+    const list = Array.isArray(raw) ? raw : (raw as { results?: unknown[] })?.results ?? (raw as { data?: unknown[] })?.data ?? [];
+    // Kuhi returns {results:[...]} (see /usr/lib test), handle both shapes
+    if (!Array.isArray(list) || list.length === 0) {
+      console.warn('[kitawatch] spotlight: empty or unexpected shape', raw);
+    }
+    return (Array.isArray(list) ? list : []).map((s) => ({
       ...normalizeAnime(s),
       description: str((s as Raw).description),
     }));

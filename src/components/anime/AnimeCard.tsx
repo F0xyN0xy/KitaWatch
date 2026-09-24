@@ -36,6 +36,26 @@ function AnimeCard({ anime, index = 0 }: Props) {
               src={anime.cover ?? anime.banner}
               alt={anime.title}
               loading="lazy"
+              referrerPolicy="no-referrer"
+              decoding="async"
+              onError={(e) => {
+                const img = e.currentTarget as HTMLImageElement;
+                // serveproxy.com fallback: decode original URL (Linux WebKit may block proxy)
+                if (img.src.includes('serveproxy.com')) {
+                  try {
+                    const u = new URL(img.src);
+                    const orig = u.searchParams.get('url');
+                    if (orig && orig !== img.src) {
+                      img.src = decodeURIComponent(orig);
+                      return;
+                    }
+                  } catch {}
+                }
+                // fallback to banner if cover failed
+                if (img.src === anime.cover && anime.banner) {
+                  img.src = anime.banner;
+                }
+              }}
               className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
             />
           ) : (

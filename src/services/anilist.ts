@@ -37,12 +37,22 @@ async function gql<T>(
   if (token) headers.Authorization = `Bearer ${token.trim()}`;
 
   // 10s hard timeout — a hung fetch must never leave a page loading forever
+  // AbortSignal.timeout is not available in older WebKitGTK (4.0); fallback to manual AbortController
+  const withTimeout = (ms: number): AbortSignal | undefined => {
+    try {
+      // @ts-ignore - newer runtimes
+      if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+    } catch {}
+    const c = new AbortController();
+    setTimeout(() => c.abort(), ms);
+    return c.signal;
+  };
   const attempt = () =>
     fetch(API_URL, {
       method: 'POST',
       headers,
       body: JSON.stringify({ query, variables }),
-      signal: AbortSignal.timeout(10_000),
+      signal: withTimeout(10_000),
     });
   let res: Response | null = null;
   let lastErr: unknown = null;

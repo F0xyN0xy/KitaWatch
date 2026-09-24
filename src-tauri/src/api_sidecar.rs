@@ -81,6 +81,12 @@ fn find_dir(env_var: &str, markers: &[&str]) -> Option<PathBuf> {
 pub const SIDE_TRIPLE: &str = "x86_64-pc-windows-msvc";
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+pub const SIDE_TRIPLE: &str = "aarch64-unknown-linux-gnu";
+#[cfg(all(target_os = "linux", not(any(target_arch = "x86_64", target_arch = "aarch64"))))]
+pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
+#[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
+pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 
 /// `KitaWatch.exe --debug`: keep sidecar windows visible and bump log level.
 pub fn debug_mode() -> bool {
@@ -215,9 +221,77 @@ mod imp {
     /// Resolve a bundled sidecar exe. Tauri installs externalBin files WITHOUT
     /// the target-triple suffix (it strips it at bundle time), so check the
     /// plain name first; the triple-suffixed variant is a fallback.
+    /// On Linux also check the Tauri resource dir (deb/appimage layouts).
+    fn bundled_exe_with_app(name: &str, app: &tauri::App) -> Option<PathBuf> {
+        let ext = if cfg!(windows) { ".exe" } else { "" };
+        let plain = format!("{name}{ext}");
+        let tripled = format!("{name}-{SIDE_TRIPLE}{ext}");
+
+        let mut candidates: Vec<PathBuf> = Vec::new();
+
+        // 1) Next to the executable
+        if let Ok(mut exe) = std::env::current_exe() {
+            exe.pop();
+            candidates.push(exe.join(&plain));
+            candidates.push(exe.join(&tripled));
+            candidates.push(exe.join("binaries").join(&plain));
+            candidates.push(exe.join("binaries").join(&tripled));
+            // Linux deb: exe in /usr/bin, libs in /usr/lib/<app>
+            for extra in ["../lib/kitawatch", "../lib/com.kitawatch.app", "../lib/kitawatch/resources"] {
+                let base = exe.join(extra);
+                candidates.push(base.join(&plain));
+                candidates.push(base.join(&tripled));
+            }
+        }
+        // 2) Tauri resource dir (AppImage/relocated bundles)
+        if let Ok(res_dir) = app.path().resource_dir() {
+            candidates.push(res_dir.join(&plain));
+            candidates.push(res_dir.join(&tripled));
+            candidates.push(res_dir.join("binaries").join(&plain));
+            candidates.push(res_dir.join("binaries").join(&tripled));
+        }
+        // 3) AppImage APPDIR
+        if let Ok(appdir) = std::env::var("APPDIR") {
+            let base = PathBuf::from(appdir);
+            candidates.push(base.join(&plain));
+            candidates.push(base.join(format!("usr/bin/{plain}")));
+            candidates.push(base.join(format!("usr/lib/kitawatch/{plain}")));
+        }
+
+        for path in &candidates {
+            if path.exists() {
+                // Linux: ensure executable bit is set (deb may lose it if built on Windows)
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Ok(meta) = std::fs::metadata(path) {
+                        let mode = meta.permissions().mode();
+                        if mode & 0o111 == 0 {
+                            let mut perm = meta.permissions();
+                            perm.set_mode(mode | 0o755);
+                            let _ = std::fs::set_permissions(path, perm);
+                            eprintln!("[kitawatch] fixed permissions for {}", path.display());
+                        }
+                    }
+                }
+                return Some(path.clone());
+            }
+        }
+        note(format!(
+            "bundled sidecar missing: {plain} (checked {})",
+            candidates
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+        None
+    }
+
     fn bundled_exe(name: &str) -> Option<PathBuf> {
+        // Fallback without app handle (should not happen in release)
         let mut exe = std::env::current_exe().ok()?;
-        exe.pop(); // drop kitawatch.exe -> install dir
+        exe.pop();
         let ext = if cfg!(windows) { ".exe" } else { "" };
         let plain = format!("{name}{ext}");
         let tripled = format!("{name}-{SIDE_TRIPLE}{ext}");
@@ -245,7 +319,7 @@ mod imp {
 
     /// Spawn a child with stdout+stderr appended to <log_dir>/<name>.log and
     /// the env the PyInstaller entry needs to log too. Windowless unless the
-    /// app was launched with `--debug`.
+    /// app was launched with `--debug`. On Linux chmod +x is ensured before spawn.
     fn spawn_logged(name: &str, logs: &Path, mut cmd: Command) -> Option<Child> {
         #[cfg(windows)]
         {
@@ -255,20 +329,62 @@ mod imp {
                 cmd.creation_flags(CREATE_NO_WINDOW);
             }
         }
+        #[cfg(unix)]
+        {
+            // Ensure the binary is executable (Linux deb may lose +x)
+            if let Some(prog) = cmd.get_program().to_str() {
+                let p = PathBuf::from(prog);
+                if p.exists() {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Ok(meta) = std::fs::metadata(&p) {
+                        let mode = meta.permissions().mode();
+                        if mode & 0o111 == 0 {
+                            let mut perm = meta.permissions();
+                            perm.set_mode(mode | 0o755);
+                            let _ = std::fs::set_permissions(&p, perm);
+                        }
+                    }
+                }
+            }
+        }
         let _ = std::fs::create_dir_all(logs);
         let log_path = logs.join(format!("{name}.log"));
-        match OpenOptions::new().create(true).append(true).open(&log_path) {
+        let log_ok = match OpenOptions::new().create(true).append(true).open(&log_path) {
             Ok(file) => {
-                // clone before moving into Stdio so both get the same fd offset
-                let out = file.try_clone().ok()?;
-                let err = file.try_clone().ok()?;
-                cmd.stdout(Stdio::from(out)).stderr(Stdio::from(err));
+                match (file.try_clone(), file.try_clone()) {
+                    (Ok(out), Ok(err)) => {
+                        cmd.stdout(Stdio::from(out)).stderr(Stdio::from(err));
+                        true
+                    }
+                    _ => {
+                        note(format!("cannot clone log file handle for {name}"));
+                        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+                        false
+                    }
+                }
             }
-            Err(e) => note(format!("cannot open {log_path:?} for sidecar logs: {e}")),
+            Err(e) => {
+                note(format!("cannot open {log_path:?} for sidecar logs: {e} — spawning without log redirection"));
+                cmd.stdout(Stdio::null()).stderr(Stdio::null());
+                false
+            }
+        };
+        if !log_ok {
+            eprintln!("[kitawatch] warning: {name} will run without log file");
         }
         cmd.env("KITAWATCH_LOG_DIR", logs)
             .env("LOG_NAME", name)
             .env("LOG_LEVEL", if debug_mode() { "info" } else { "warning" });
+        // Linux: ensure child inherits minimal env for certs
+        #[cfg(target_os = "linux")]
+        {
+            // Forward SSL cert paths if set
+            for k in ["SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE"] {
+                if let Ok(v) = std::env::var(k) {
+                    cmd.env(k, v);
+                }
+            }
+        }
         match cmd.spawn() {
             Ok(child) => Some(child),
             Err(e) => {
@@ -283,11 +399,16 @@ mod imp {
         let logs = super::log_dir(app);
 
         if !port_open("127.0.0.1:8000") {
-            if let Some(exe) = bundled_exe("kitawatch-kuhi-api") {
-                if let Some(c) = spawn_logged("kitawatch-kuhi-api", &logs, Command::new(exe)) {
+            if let Some(exe) = bundled_exe_with_app("kitawatch-kuhi-api", app).or_else(|| bundled_exe("kitawatch-kuhi-api")) {
+                let mut cmd = Command::new(&exe);
+                cmd.env("PORT", "8000");
+                eprintln!("[kitawatch] spawning kuhi-api from {}", exe.display());
+                if let Some(c) = spawn_logged("kitawatch-kuhi-api", &logs, cmd) {
                     eprintln!("[kitawatch] started bundled kuhi-api on 127.0.0.1:8000 (log: {})",
                         logs.join("kitawatch-kuhi-api.log").display());
                     procs.push(("Kuhi API", Proc::Bundled(c)));
+                } else {
+                    note(format!("failed to spawn kuhi-api from {}", exe.display()));
                 }
             }
         } else {
@@ -295,11 +416,16 @@ mod imp {
         }
 
         if !port_open("127.0.0.1:8001") {
-            if let Some(exe) = bundled_exe("kitawatch-proxy") {
-                if let Some(c) = spawn_logged("kitawatch-proxy", &logs, Command::new(exe)) {
+            if let Some(exe) = bundled_exe_with_app("kitawatch-proxy", app).or_else(|| bundled_exe("kitawatch-proxy")) {
+                let mut cmd = Command::new(&exe);
+                cmd.env("PORT", "8001");
+                eprintln!("[kitawatch] spawning proxy from {}", exe.display());
+                if let Some(c) = spawn_logged("kitawatch-proxy", &logs, cmd) {
                     eprintln!("[kitawatch] started bundled proxy on 127.0.0.1:8001 (log: {})",
                         logs.join("kitawatch-proxy.log").display());
                     procs.push(("proxy", Proc::Bundled(c)));
+                } else {
+                    note(format!("failed to spawn proxy from {}", exe.display()));
                 }
             }
         } else {
@@ -307,13 +433,16 @@ mod imp {
         }
 
         if !port_open("127.0.0.1:4000") {
-            if let Some(exe) = bundled_exe("kitawatch-anivexa") {
-                let mut anivexa_cmd = Command::new(exe);
+            if let Some(exe) = bundled_exe_with_app("kitawatch-anivexa", app).or_else(|| bundled_exe("kitawatch-anivexa")) {
+                let mut anivexa_cmd = Command::new(&exe);
                 anivexa_cmd.env("PORT", "4000");
+                eprintln!("[kitawatch] spawning anivexa from {}", exe.display());
                 if let Some(c) = spawn_logged("kitawatch-anivexa", &logs, anivexa_cmd) {
                     eprintln!("[kitawatch] started bundled anivexa on 127.0.0.1:4000 (log: {})",
                         logs.join("kitawatch-anivexa.log").display());
                     procs.push(("Anivexa API", Proc::Bundled(c)));
+                } else {
+                    note(format!("failed to spawn anivexa from {}", exe.display()));
                 }
             }
         } else {
@@ -343,7 +472,34 @@ fn kill_stragglers() {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+fn kill_stragglers() {
+    use std::process::{Command, Stdio};
+    // Use pkill -x (exact match) first, then -f fallback. -x avoids killing the main app
+    // if its cmdline happens to contain the sidecar name (e.g. AppImage).
+    for name in [
+        "kitawatch-kuhi-api",
+        "kitawatch-proxy",
+        "kitawatch-anivexa",
+    ] {
+        // exact binary name
+        let _ = Command::new("pkill")
+            .arg("-x")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        // also try with triple suffix (just in case)
+        let _ = Command::new("pkill")
+            .arg("-x")
+            .arg(format!("{name}-x86_64-unknown-linux-gnu"))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 fn kill_stragglers() {}
 
 pub fn start(app: &tauri::App) -> Sidecars {
