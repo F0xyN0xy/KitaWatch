@@ -9,13 +9,11 @@ on:
 
 permissions:
   contents: read
-  deployments: write          # NEW — allows creating deployment records
+  deployments: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Skip in forks without FTP secrets (prevents "username required" error)
-    if: ${{ secrets.IF_FTP_USER != '' }}
     environment:
       name: infinityfree
       url: https://kitawatch.free.nf

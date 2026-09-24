@@ -11,6 +11,10 @@
 //! The frontend talks to 127.0.0.1 — this only keeps the local
 //! instances alive and reaps them on exit.
 //!
+//! Every child is also wired into proc_group: on Windows a Job Object with
+//! KILL_ON_JOB_CLOSE, on Linux PR_SET_PDEATHSIG — so an update or a crash
+//! can never leave orphaned sidecars holding ports and locking exe files.
+//!
 //! Debuggability (for end users, not just devs):
 //! - Every spawned child gets stdout/stderr appended to
 //!   <app_log_dir>/<sidecar-name>.log (same folder Tauri itself uses).
@@ -134,13 +138,14 @@ mod imp {
     use std::process::Command;
 
     fn spawn_uvicorn(dir: &PathBuf, app: &str, port: u16, logs: &Path) -> Option<Child> {
-        match Command::new(python())
-            .args(["-m", "uvicorn", app, "--host", "127.0.0.1", "--port", &port.to_string()])
+        let mut cmd = Command::new(python());
+        cmd.args(["-m", "uvicorn", app, "--host", "127.0.0.1", "--port", &port.to_string()])
             .env("KITAWATCH_LOG_DIR", logs)
-            .current_dir(dir)
-            .spawn()
-        {
+            .current_dir(dir);
+        crate::proc_group::configure(&mut cmd);
+        match cmd.spawn() {
             Ok(child) => {
+                crate::proc_group::register(&child);
                 eprintln!("[kitawatch] started sidecar {app} on 127.0.0.1:{port}");
                 Some(child)
             }
@@ -152,14 +157,15 @@ mod imp {
     }
 
     fn spawn_node(dir: &PathBuf, script: &str, port: u16, logs: &Path) -> Option<Child> {
-        match Command::new("node")
-            .arg(script)
+        let mut cmd = Command::new("node");
+        cmd.arg(script)
             .env("PORT", port.to_string())
             .env("KITAWATCH_LOG_DIR", logs)
-            .current_dir(dir)
-            .spawn()
-        {
+            .current_dir(dir);
+        crate::proc_group::configure(&mut cmd);
+        match cmd.spawn() {
             Ok(child) => {
+                crate::proc_group::register(&child);
                 eprintln!("[kitawatch] started sidecar {script} on 127.0.0.1:{port}");
                 Some(child)
             }
@@ -321,6 +327,9 @@ mod imp {
     /// the env the PyInstaller entry needs to log too. Windowless unless the
     /// app was launched with `--debug`. On Linux chmod +x is ensured before spawn.
     fn spawn_logged(name: &str, logs: &Path, mut cmd: Command) -> Option<Child> {
+        // Die-with-parent wiring first: Windows job object (via register
+        // after spawn) + Linux pdeathsig (must be armed pre-exec).
+        crate::proc_group::configure(&mut cmd);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -386,7 +395,10 @@ mod imp {
             }
         }
         match cmd.spawn() {
-            Ok(child) => Some(child),
+            Ok(child) => {
+                crate::proc_group::register(&child);
+                Some(child)
+            }
             Err(e) => {
                 note(format!("failed to spawn sidecar {name}: {e}"));
                 None
@@ -456,6 +468,8 @@ mod imp {
 /// Windows: sidecars orphaned by a crashed/killed app (no graceful Exit
 /// event) survive as zombie exes. Kill any leftovers before spawning fresh —
 /// port probes alone can't see a hung process holding no listen socket.
+/// Since proc_group.rs landed, orphans should only ever be leftovers from
+/// BEFORE an updated app version — this sweep still cleans those up.
 #[cfg(target_os = "windows")]
 fn kill_stragglers() {
     use std::process::{Command, Stdio};

@@ -48,6 +48,8 @@ export default function Settings() {
     enableConsumetFallback,
     setConsumetBaseUrl,
     setEnableConsumetFallback,
+    showAdultContent,
+    setShowAdultContent,
   } = useSettingsStore();
 
   const { accessToken, viewer, clear } = useAuthStore();
@@ -226,6 +228,19 @@ export default function Settings() {
         </div>
       </Section>
 
+      <Section title="Content">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Show adult content (18+)</p>
+            <p className="text-xs text-zinc-600">
+              Hentai is hidden from search and discovery by default — searching
+              for it by name or picking the Hentai genre still shows it
+            </p>
+          </div>
+          <Toggle on={showAdultContent} onChange={setShowAdultContent} />
+        </div>
+      </Section>
+
       <Section title="Extra Providers">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -286,7 +301,7 @@ export default function Settings() {
       </Section>
 
       <Section title="About">
-        <p className="text-sm text-zinc-400">KitaWatch v0.7.0</p>
+        <p className="text-sm text-zinc-400">KitaWatch v0.7.1</p>
         <div className="flex flex-wrap gap-2">
           <a
             href="https://github.com/F0xyN0xy/KitaWatch/issues"

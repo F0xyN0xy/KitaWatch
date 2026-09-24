@@ -1,15 +1,16 @@
 import type { AnimeInfo, AnimeSummary } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore, DEFAULT_REDIRECT } from '@/stores/authStore';
+import { adultContentAllowed } from '@/services/api';
 
 const API_URL = 'https://graphql.anilist.co';
-/** Public OAuth client ID — identifies the app; users still log in with THEIR account. */
-export const ANILIST_CLIENT_ID = '34664';
 export const OAUTH_AUTHORIZE = 'https://anilist.co/api/v2/oauth/authorize';
+export const OAUTH_TOKEN = 'https://anilist.co/api/v2/oauth/token';
 /** Redirect URI — must exactly match the AniList client's registered URL. */
 export function getRedirectUri(): string {
   return useAuthStore.getState().anilistRedirect?.trim() || DEFAULT_REDIRECT;
 }
+export const OAUTH_REDIRECT = DEFAULT_REDIRECT; // back-compat
 
 export class AniListError extends Error {}
 
@@ -34,25 +35,20 @@ async function gql<T>(
     'Content-Type': 'application/json',
     Accept: 'application/json',
   };
-  if (token) headers.Authorization = `Bearer ${token.trim()}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token.trim()}`;
+    console.log('gql: Using token (length ' + token.length + '):', token.substring(0, 10) + '...');
+  } else {
+    console.log('gql: No token');
+  }
 
   // 10s hard timeout — a hung fetch must never leave a page loading forever
-  // AbortSignal.timeout is not available in older WebKitGTK (4.0); fallback to manual AbortController
-  const withTimeout = (ms: number): AbortSignal | undefined => {
-    try {
-      // @ts-ignore - newer runtimes
-      if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
-    } catch {}
-    const c = new AbortController();
-    setTimeout(() => c.abort(), ms);
-    return c.signal;
-  };
   const attempt = () =>
     fetch(API_URL, {
       method: 'POST',
       headers,
       body: JSON.stringify({ query, variables }),
-      signal: withTimeout(10_000),
+      signal: AbortSignal.timeout(10_000),
     });
   let res: Response | null = null;
   let lastErr: unknown = null;
@@ -125,30 +121,36 @@ query ($name: String!) {
   }
 }`;
 
+// genre_not_in: null = argument not applied (GraphQL). The autocomplete
+// hides hentai unless the user asked for it — see adultContentAllowed().
+const SEARCH_QUERY = `
+query ($q: String, $withoutHentai: [String]) {
+  Page(page: 1, perPage: 7) {
+    results: media(type: ANIME, search: $q, genre_not_in: $withoutHentai) {
+      id
+      title { english romaji }
+      coverImage { large }
+      format
+    }
+  }
+}`;
+
+// "Because you watched" row. genres are requested only so the adult filter
+// can drop hentai recs — see recommendations() below.
 const RECOMMENDATIONS_QUERY = `
 query ($id: Int) {
   Media(id: $id, type: ANIME) {
-    recommendations(sort: RATING_DESC, perPage: 14) {
+    recommendations(perPage: 14, sort: RATING_DESC) {
       nodes {
         mediaRecommendation {
           id
           title { english romaji }
           coverImage { large }
           format
+          meanScore
+          genres
         }
       }
-    }
-  }
-}`;
-
-const SEARCH_QUERY = `
-query ($q: String) {
-  Page(page: 1, perPage: 7) {
-    results: media(type: ANIME, search: $q) {
-      id
-      title { english romaji }
-      coverImage { large }
-      format
     }
   }
 }`;
@@ -200,33 +202,6 @@ export const anilist = {
     };
   },
 
-  /** Top community recommendations for an anime — AniList direct (covers guaranteed). */
-  recommendations: async (id: number | string): Promise<AnimeSummary[]> => {
-    const data = await gql<{
-      Media?: {
-        recommendations?: {
-          nodes?: {
-            mediaRecommendation?: {
-              id?: number;
-              title?: { english?: string; romaji?: string };
-              coverImage?: { large?: string };
-              format?: string;
-            } | null;
-          }[];
-        };
-      };
-    }>(RECOMMENDATIONS_QUERY, { id: Number(id) });
-    return (data.Media?.recommendations?.nodes ?? [])
-      .map((n) => n.mediaRecommendation)
-      .filter((m): m is NonNullable<typeof m> & { id: number } => !!m && typeof m.id === 'number')
-      .map((m) => ({
-        id: m.id,
-        title: m.title?.english ?? m.title?.romaji ?? 'Unknown title',
-        cover: m.coverImage?.large,
-        type: m.format,
-      }));
-  },
-
   /** Fast autocomplete — AniList direct (much snappier than the sidecar). */
   search: async (q: string): Promise<AnimeSummary[]> => {
     const data = await gql<{
@@ -238,13 +213,59 @@ export const anilist = {
           format?: string;
         }[];
       };
-    }>(SEARCH_QUERY, { q });
+    }>(SEARCH_QUERY, {
+      q,
+      withoutHentai: adultContentAllowed(q) ? null : ['Hentai'],
+    });
     return data.Page.results.map((m) => ({
       id: m.id,
       title: m.title?.english ?? m.title?.romaji ?? 'Unknown title',
       cover: m.coverImage?.large,
       type: m.format,
     }));
+  },
+
+  /**
+   * AniList's "because you watched" recommendations for a title — the
+   * "Because you watched X" row on Home. Adult-filtered like every other
+   * discovery surface unless the toggle is on (a watched hentai title's
+   * recs still don't leak into Home without it).
+   */
+  recommendations: async (id: number | string): Promise<AnimeSummary[]> => {
+    const data = await gql<{
+      Media?: {
+        recommendations?: {
+          nodes?: {
+            mediaRecommendation?: {
+              id?: number;
+              title?: { english?: string; romaji?: string };
+              coverImage?: { large?: string };
+              format?: string;
+              meanScore?: number | null;
+              genres?: string[];
+            } | null;
+          }[];
+        } | null;
+      } | null;
+    }>(RECOMMENDATIONS_QUERY, { id: Number(id) });
+
+    const allowAdult = adultContentAllowed();
+    const nodes = data.Media?.recommendations?.nodes ?? [];
+    return nodes
+      .map((n) => n.mediaRecommendation)
+      .filter((m): m is NonNullable<typeof m> => !!m?.id)
+      .filter(
+        (m) =>
+          allowAdult ||
+          !(m.genres ?? []).some((g) => g.toLowerCase() === 'hentai'),
+      )
+      .map((m) => ({
+        id: m.id as number,
+        title: m.title?.english ?? m.title?.romaji ?? 'Unknown title',
+        cover: m.coverImage?.large,
+        rating: m.meanScore != null ? m.meanScore / 10 : undefined,
+        type: m.format,
+      }));
   },
 
   /** Logged-in user profile. */
@@ -273,6 +294,7 @@ export const anilist = {
       };
     }>(FAVORITES_QUERY, { name: username }, token);
 
+    // Deliberately NOT adult-filtered — it is the user's own AniList list.
     const nodes = data.User?.favourites?.anime?.nodes ?? [];
     return nodes
       .filter((n): n is typeof n & { id: number } => typeof n.id === 'number')
@@ -291,9 +313,9 @@ export const anilist = {
 };
 
 /** Open the AniList authorize page in the system browser. */
-export async function startAniListOAuth(): Promise<void> {
+export async function startAniListOAuth(clientId?: string): Promise<void> {
   const url =
-    `${OAUTH_AUTHORIZE}?client_id=${encodeURIComponent(ANILIST_CLIENT_ID)}` +
+    `${OAUTH_AUTHORIZE}?client_id=${encodeURIComponent(clientId ?? '34664')}` +
     `&redirect_uri=${encodeURIComponent(getRedirectUri())}&response_type=code`;
   try {
     const { openUrl } = await import('@tauri-apps/plugin-opener');
@@ -303,22 +325,12 @@ export async function startAniListOAuth(): Promise<void> {
   }
 }
 
-/**
- * Trade the deep-link callback code for an access token.
- * Desktop: the Rust command does it (secret stays out of frontend code).
- * Environment variables (.env) win; the values stored in Settings are the
- * fallback so the installed app works where no .env exists.
- */
 export async function exchangeAuthCode(code: string): Promise<string> {
-  const { anilistRedirect } = useAuthStore.getState();
   try {
     return await invoke<string>('exchange_anilist_token', {
       code,
-      clientId: ANILIST_CLIENT_ID,
-      clientSecret: null,
-      redirectUri: anilistRedirect || null,
     });
   } catch (e) {
-    throw new AniListError(e instanceof Error ? e.message : String(e));
+    throw new AniListError(String(e));
   }
 }

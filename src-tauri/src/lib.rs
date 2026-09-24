@@ -1,6 +1,7 @@
 mod api_sidecar;
 mod commands;
 mod config;
+mod proc_group;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,6 +48,9 @@ pub fn run() {
             // Debug spawns from source checkouts; release spawns the bundled
             // binaries next to the app exe (windowless on Windows, logged to
             // the app log dir — launch with `--debug` for consoles).
+            // Every child is wired into proc_group (Windows kill-on-close
+            // job object / Linux pdeathsig), so updates and crashes can
+            // never orphan a sidecar.
             let sidecars = api_sidecar::start(app);
 
             app.manage(std::sync::Mutex::new(sidecars));

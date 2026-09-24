@@ -70,16 +70,22 @@ export default function Home() {
   );
 
   const latestWatch = historyEntries[0];
-  const recommendations = useApi<AnimeSummary[]>(
-    () =>
-      latestWatch
-        ? anilist
-            .recommendations(latestWatch.animeId)
-            .catch(() => api.recommendations(latestWatch.animeId, 1).then((p) => p.results))
-        : Promise.resolve(
-            []),
-    [latestWatch?.animeId]
-  );
+  // Async fetcher — NOT a promise chain. a .catch() on a method call can
+  // never catch a synchronous TypeError ("x is not a function"); try/catch
+  // inside an async function does, and still falls back to the Kuhi API.
+  const fetchRecommendations = async (): Promise<AnimeSummary[]> => {
+    if (!latestWatch) return [];
+    try {
+      return await anilist.recommendations(latestWatch.animeId);
+    } catch {
+      return api
+        .recommendations(latestWatch.animeId, 1)
+        .then((p) => p.results);
+    }
+  };
+  const recommendations = useApi<AnimeSummary[]>(fetchRecommendations, [
+    latestWatch?.animeId,
+  ]);
 
   return (
     <PageContainer>

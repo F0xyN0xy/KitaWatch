@@ -62,6 +62,12 @@ interface SettingsState {
   rememberFullscreen: boolean;
   /** #4: last fullscreen state (internal, persisted). */
   lastFullscreen: boolean;
+  /**
+   * Show hentai in search and discovery lists. Default off — see
+   * adultContentAllowed() in services/api.ts for the override rules
+   * (explicit name/genre searches always get through).
+   */
+  showAdultContent: boolean;
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
   setProviderPriority: (order: string[]) => void;
@@ -72,6 +78,7 @@ interface SettingsState {
   setEnableAnivexa: (v: boolean) => void;
   setRememberFullscreen: (v: boolean) => void;
   setLastFullscreen: (v: boolean) => void;
+  setShowAdultContent: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -90,6 +97,7 @@ export const useSettingsStore = create<SettingsState>()(
       enableAnivexa: true,
       rememberFullscreen: true,
       lastFullscreen: false,
+      showAdultContent: false,
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
       setProviderPriority: (providerPriority) => set({ providerPriority }),
@@ -101,10 +109,11 @@ export const useSettingsStore = create<SettingsState>()(
       setEnableAnivexa: (enableAnivexa) => set({ enableAnivexa }),
       setRememberFullscreen: (rememberFullscreen) => set({ rememberFullscreen }),
       setLastFullscreen: (lastFullscreen) => set({ lastFullscreen }),
+      setShowAdultContent: (showAdultContent) => set({ showAdultContent }),
     }),
     {
       name: 'kitawatch-settings',
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -125,6 +134,10 @@ export const useSettingsStore = create<SettingsState>()(
             s.consumetBaseUrl = 'http://localhost:3000';
           }
         }
+        // v4 introduced the adult-content filter (showAdultContent). The
+        // key is absent in older persisted states, so it falls through to
+        // the false default above — upgrades get the safe default too.
+        // Nothing to rewrite here.
         return s as SettingsState;
       },
     },

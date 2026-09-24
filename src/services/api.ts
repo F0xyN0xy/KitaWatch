@@ -128,6 +128,21 @@ export function normalizeAnime(raw: unknown): AnimeSummary {
   };
 }
 
+// ── Adult content ────────────────────────────────────────────
+// Hentai is filtered out of discovery by default. Two explicit signals
+// override the filter:
+//   1. the "Show adult content" toggle in Settings
+//   2. the user asking for hentai directly — typing "hentai" in the
+//      search box, or picking the Hentai genre filter in Browse
+// Direct ID access (details, watch, own favorites) is never filtered.
+
+const ADULT_QUERY_RE = /hentai/i;
+
+export function adultContentAllowed(explicit?: string): boolean {
+  if (useSettingsStore.getState().showAdultContent) return true;
+  return !!explicit && ADULT_QUERY_RE.test(explicit);
+}
+
 /** v3 returns { results, hasNextPage, ... }; tolerate bare arrays (older forks). */
 async function paged<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<Paged<T>> {
   const raw = await request<Paged<T> | T[]>(path, params);
@@ -140,9 +155,19 @@ async function paged<T>(path: string, params?: Record<string, string | number | 
 async function pagedAnime(
   path: string,
   params?: Record<string, string | number | boolean | undefined>,
+  /** The user's own words (search text) or chosen genre — "hentai" unblocks. */
+  explicit?: string,
 ): Promise<Paged<AnimeSummary>> {
   const p = await paged<unknown>(path, params);
-  return { ...p, results: p.results.map(normalizeAnime) };
+  const results = p.results.map(normalizeAnime);
+  const allowAdult = adultContentAllowed(explicit);
+  // NOTE: client-side filtering can thin out a page (fewer than perPage
+  // items, occasionally an empty "Load more" page at the tail). Accepted
+  // for now — the Kuhi API has no server-side exclude-genre parameter.
+  return {
+    ...p,
+    results: allowAdult ? results : results.filter((a) => !a.isAdult),
+  };
 }
 
 // ── Episodes adapter ─────────────────────────────────────────
@@ -193,14 +218,18 @@ function adaptEpisodes(raw: unknown): EpisodeSummary[] {
 export const api = {
   // Search & discovery
   search: (query: string, page = 1, perPage = 24) =>
-    pagedAnime('/anime/search', { query, page, per_page: perPage }),
+    pagedAnime('/anime/search', { query, page, per_page: perPage }, query),
   suggestions: async (query: string) => {
     const raw = await request<unknown[] | { results?: unknown[] }>(
       '/anime/suggestions',
       { query },
     );
     const list = Array.isArray(raw) ? raw : (raw.results ?? []);
-    return list.map(normalizeAnime).filter((s) => s.id !== 0);
+    const allowAdult = adultContentAllowed(query);
+    return list
+      .map(normalizeAnime)
+      .filter((s) => s.id !== 0)
+      .filter((s) => allowAdult || !s.isAdult);
   },
   genres: async () => {
     const raw = await request<string[] | { genres?: string[] }>('/anime/genres');
@@ -215,10 +244,13 @@ export const api = {
     if (!Array.isArray(list) || list.length === 0) {
       console.warn('[kitawatch] spotlight: empty or unexpected shape', raw);
     }
-    return (Array.isArray(list) ? list : []).map((s) => ({
-      ...normalizeAnime(s),
-      description: str((s as Raw).description),
-    }));
+    const allowAdult = adultContentAllowed();
+    return (Array.isArray(list) ? list : [])
+      .map((s) => ({
+        ...normalizeAnime(s),
+        description: str((s as Raw).description),
+      }))
+      .filter((s) => allowAdult || !s.isAdult);
   },
   trending: (page = 1, perPage = 24) =>
     pagedAnime('/anime/trending', { page, per_page: perPage }),
@@ -238,16 +270,21 @@ export const api = {
     page?: number;
     perPage?: number;
   }) =>
-    pagedAnime('/anime/filter', {
-      genre: opts.genre,
-      year: opts.year,
-      season: opts.season,
-      format: opts.format,
-      status: opts.status,
-      sort: opts.sort ?? 'TRENDING_DESC',
-      page: opts.page ?? 1,
-      per_page: opts.perPage ?? 24,
-    }),
+    pagedAnime(
+      '/anime/filter',
+      {
+        genre: opts.genre,
+        year: opts.year,
+        season: opts.season,
+        format: opts.format,
+        status: opts.status,
+        sort: opts.sort ?? 'TRENDING_DESC',
+        page: opts.page ?? 1,
+        per_page: opts.perPage ?? 24,
+      },
+      // Picking the Hentai genre IS the explicit search — let it through.
+      opts.genre,
+    ),
 
   // Details
   info: async (id: number | string): Promise<AnimeInfo> => {

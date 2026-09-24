@@ -1,6 +1,6 @@
 [package]
 name = "kitawatch"
-version = "0.7.0"
+version = "0.7.1"
 description = "KitaWatch - desktop anime streaming client"
 edition = "2021"
 rust-version = "1.77.2"
@@ -25,3 +25,20 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+# Die-with-parent wiring for spawned sidecars (see src/proc_group.rs).
+# Windows: Job Object with KILL_ON_JOB_CLOSE — the kernel kills the whole
+# sidecar group when the app exits, no matter how (update/force-kill/crash).
+# Win32_Security is required: CreateJobObjectW's SECURITY_ATTRIBUTES parameter
+# lives there, and the function is cfg-gated behind that feature in windows-sys.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+# Linux: PR_SET_PDEATHSIG so sidecars get SIGKILL when the parent dies.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
