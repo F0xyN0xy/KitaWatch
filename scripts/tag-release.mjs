@@ -35,7 +35,14 @@ writeFileSync(
 
 console.log(`[release] bumped to ${version}`);
 run('git add .');
-run(`git commit -m "${tag}"`);
+// Version may already be bumped in the working copy (e.g. re-running the
+// script) — an empty commit exits 1 and would abort before the tag push.
+const staged = execSync('git status --porcelain', { cwd: root, encoding: 'utf8' }).trim();
+if (staged) {
+  run(`git commit -m "${tag}"`);
+} else {
+  console.log('[release] nothing to commit — versions already bumped, tagging existing tree');
+}
 run(`git tag ${tag}`);
 run('git push origin main');
 run(`git push origin ${tag}`);
