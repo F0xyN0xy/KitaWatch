@@ -132,7 +132,7 @@ export default function Sidebar() {
         </div>
         <Disclaimer />
         <p className="text-[10px] uppercase tracking-widest text-zinc-700">
-          v0.7.1
+          v0.8.0
         </p>
       </div>
     </motion.aside>

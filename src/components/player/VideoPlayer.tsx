@@ -120,7 +120,11 @@ export default function VideoPlayer({
       // into a blob URL (direct first, local proxy as fallback) so a failure
       // just means "no subtitles" — the video still plays.
       if (sub && subType && subType !== 'ass') {
-        for (const candidate of [sub.url, proxy.cors(sub.url)]) {
+        // Second candidate goes through the playback proxy (no host
+        // allowlist), not /cors — subtitle CDNs like dragonatepizza.online
+        // rotate hosts exactly like segment CDNs do and would 403 on the
+        // /cors allowlist.
+        for (const candidate of [sub.url, proxy.segment(sub.url)]) {
           try {
             const res = await fetch(candidate);
             if (res.ok) {

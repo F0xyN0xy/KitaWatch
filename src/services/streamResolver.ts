@@ -4,7 +4,6 @@ import { animepahe } from './animepahe';
 import { anivexa } from './anivexa';
 import { anikage } from './anikage';
 import { oneanime } from './oneanime';
-import { anify } from './anify';
 import { probeAll } from './probe';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
@@ -150,7 +149,8 @@ async function resolveStreamsInner(
         return nonEmpty('Anivexa', await anivexa.watchAll(animeId, episode, audio));
       },
     },
-    { tag: 'anify', name: 'Anify', run: () => anify.streams(animeId, episode, audio) },
+    // Anify removed: api.anify.tv has been unreachable for months (502/timeout
+    // on every request) — the provider only wasted a race slot and proxy hits.
     { tag: '1anime', name: '1anime', run: () => oneanime.streams(animeId, episode, audio) },
     {
       tag: 'anikage',
@@ -228,9 +228,16 @@ async function resolveStreamsInner(
     throw e;
   }
 
-  // Immediate result — playback starts from this, no merge waiting.
+    // Immediate result — playback starts from this, no merge waiting.
+  // Dedupe the winner's own list first: aggregators (Anivexa races ~15
+  // sub-providers internally) can return the same URL twice, which both
+  // wastes pills and trips React duplicate-key warnings in the sources list.
+  const winnerSeen = new Set<string>();
+  const winnerStreams = first.result.streams.filter((s) =>
+    winnerSeen.has(s.url) ? false : (winnerSeen.add(s.url), true),
+  );
   const value: ResolvedStreams = {
-    streams: prioritize(first.result.streams),
+    streams: prioritize(winnerStreams),
     subtitles: first.result.subtitles,
     errors,
   };

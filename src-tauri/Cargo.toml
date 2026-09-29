@@ -1,6 +1,6 @@
 [package]
 name = "kitawatch"
-version = "0.7.1"
+version = "0.8.0"
 description = "KitaWatch - desktop anime streaming client"
 edition = "2021"
 rust-version = "1.77.2"

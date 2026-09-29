@@ -108,7 +108,6 @@ export default function Home() {
           title="Continue Watching"
           items={continueWatching}
           getProgress={(a) => progressById.get(a.id)}
-          getHref={(a) => `/watch/${a.id}/${episodeById.get(a.id) ?? 1}`}
           getBadge={(a) => `E${episodeById.get(a.id) ?? 1}`}
         />
       )}

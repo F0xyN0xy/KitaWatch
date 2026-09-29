@@ -231,8 +231,11 @@ export default function Watch() {
         </div>
       </div>
 
-      {/* Player (HTTP sources first, torrent blob as last resort) */}
-      {streams.loading ? (
+      {/* Player (HTTP sources first, torrent blob as last resort).
+          Background merges re-trigger streams.reload() — with data already
+          loaded that refresh must NOT unmount the player into a skeleton
+          (the "Anivexa erased my source" flash). Skeleton only pre-data. */}
+      {streams.loading && !streams.data ? (
         <Skeleton className="aspect-video rounded-2xl" />
       ) : activeSource ? (
         httpPlayer
@@ -280,7 +283,7 @@ export default function Watch() {
       )}
 
       {/* Torrent fallback — when nothing else worked */}
-      {!streams.loading && info.data && (
+      {info.data && (
         <TorrentPanel
           animeTitle={info.data.title}
           onStream={(url, label) => {
@@ -290,15 +293,17 @@ export default function Watch() {
       )}
 
       {/* Provider availability probe */}
-      {!streams.loading && info.data && (
+      {info.data && (
         <ProviderCheck animeId={id!} title={info.data.title} episode={epNum} />
       )}
 
       {/* All sources — one consolidated block. Fastest provider first, the
           rest merge in underneath as they answer. Nothing disappears: dead
           sources stay listed (greyed, unclickable) so a late provider can
-          never make the current stream vanish from the list. */}
-      {!streams.loading && allSources.length > 0 && !torrent && (
+          never make the current stream vanish from the list. Stays mounted
+          during background merges (streams.reload) — only the pill contents
+          update. */}
+      {allSources.length > 0 && !torrent && (
         <section className="rounded-2xl bg-ink-900 p-4 ring-1 ring-white/5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">

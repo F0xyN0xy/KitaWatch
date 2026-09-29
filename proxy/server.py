@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import quote, urlencode, urljoin, urlparse
 
 from curl_cffi.requests import AsyncSession
 from fastapi import FastAPI, Query
@@ -17,10 +17,11 @@ app.add_middleware(
 )
 
 # Domains we are willing to fetch on behalf of the app. Suffix match.
-# NOTE: playback routes (proxy_m3u8/proxy_segment) need every CDN host a
-# provider chain touches — providers rotate CDNs constantly, so this list
-# grows. The planned fix is a launcher-generated token header that lets us
-# drop the playback allowlist entirely.
+# NOTE: the playback routes (proxy_m3u8/proxy_segment) deliberately have NO
+# allowlist — provider CDNs rotate nested hosts weekly (megaplay alone has
+# burned through a dozen), so host matching there is unwinnable whack-a-mole.
+# The allowlist below stays for /cors, /fetch and /kwik, which return
+# arbitrary content to the page and still need guarding.
 DEFAULT_ALLOWLIST = {
     # metadata / community APIs
     "anikage.cc",
@@ -61,7 +62,11 @@ ALLOWLIST = DEFAULT_ALLOWLIST | {
 
 # Browser impersonation target (TLS/JA3/HTTP2 fingerprint). Plain clients get
 # Cloudflare-403'd by nyaa/animepahe and half the provider CDNs.
-BROWSER = "chrome124"
+# Impersonation profile tried in order — older profiles get flagged by
+# Cloudflare over time (chrome124 started 403ing animepahe in Sep 2026),
+# so we fall back through the newest profiles the installed curl_cffi has.
+BROWSER_PROFILES = ["chrome131", "chrome124", "chrome120"]
+BROWSER = BROWSER_PROFILES[0]
 
 
 def host_allowed(url: str) -> bool:
@@ -85,9 +90,24 @@ def _headers(referer: str | None) -> dict[str, str]:
 
 
 async def _get(url: str, referer: str | None, timeout: float):
-    """One browser-impersonated GET. Raises on network errors."""
-    async with AsyncSession(impersonate=BROWSER, timeout=timeout) as client:
-        return await client.get(url, headers=_headers(referer))
+    """One browser-impersonated GET. Raises on network errors.
+
+    Tries the impersonation profiles newest-first: the installed curl_cffi
+    may not ship the newest profile, and older ones get flagged by
+    Cloudflare over time. An invalid profile name raises immediately, so
+    we can cheaply probe down the list.
+    """
+    last_err: Exception | None = None
+    for profile in BROWSER_PROFILES:
+        try:
+            async with AsyncSession(impersonate=profile, timeout=timeout) as client:
+                return await client.get(url, headers=_headers(referer))
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if "impersonate" not in msg and "profile" not in msg:
+                raise
+    raise last_err or RuntimeError("no impersonation profile available")
 
 
 @app.get("/cors")
@@ -112,9 +132,11 @@ async def cors(u: str = Query(...), ref: str | None = None):
 
 @app.get("/proxy_m3u8")
 async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
-    """Fetch an m3u8 playlist, rewrite segment URLs through /proxy_segment."""
-    if not host_allowed(url):
-        return JSONResponse({"error": "host not allowed"}, status_code=403)
+    """Fetch an m3u8 playlist, rewrite segment URLs through /proxy_segment.
+
+    No host allowlist here (see note above DEFAULT_ALLOWLIST): CDNs rotate
+    nested hosts faster than any list can track.
+    """
     try:
         r = await _get(url, referer, 30.0)
     except Exception as e:
@@ -125,20 +147,7 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
             status_code=r.status_code,
             media_type=r.headers.get("content-type", "text/plain"),
         )
-    text = r.text
-    base = url.rsplit("/", 1)[0] + "/"
-
-    def fix(line: str) -> str:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            return line
-        if line.startswith("http://") or line.startswith("https://"):
-            seg = line
-        else:
-            seg = base + line
-        return f"/proxy_segment?url={seg}&referer={referer or ''}"
-
-    out = "\n".join(fix(l) for l in text.splitlines())
+    out = _rewrite_playlist(r.text, url, referer)
     return Response(
         content=out,
         media_type="application/vnd.apple.mpegurl",
@@ -147,6 +156,25 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
             "Cache-Control": "no-cache",
         },
     )
+
+
+def _rewrite_playlist(text: str, playlist_url: str, referer: str | None) -> str:
+    """Rewrite every resource line of an m3u8 through /proxy_segment.
+
+    urljoin resolves absolute, protocol-relative (//host/…), root-relative
+    (/…) and plain relative lines correctly. Quote the embedded URL so '&'
+    in signed segment URLs (krussdomi ?t=…&s=…&e=…) survives the trip
+    through our own query string instead of being parsed as our params.
+    """
+
+    def fix(line: str) -> str:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return line
+        seg = urljoin(playlist_url, line)
+        return f"/proxy_segment?url={quote(seg, safe=':/')}&referer={quote(referer or '', safe=':/')}"
+
+    return "\n".join(fix(l) for l in text.splitlines())
 
 
 @app.get("/proxy_segment")
@@ -158,9 +186,9 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
     fetched here would otherwise hand hls.js absolute segment URLs that it
     then loads DIRECTLY — and gets referer-403'd. So when the response is a
     playlist, rewrite its segment lines through /proxy_segment as well.
+
+    No host allowlist (see note above DEFAULT_ALLOWLIST).
     """
-    if not host_allowed(url):
-        return JSONResponse({"error": "host not allowed"}, status_code=403)
     try:
         r = await _get(url, referer, 60.0)
     except Exception as e:
@@ -173,16 +201,7 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
         or r.content[:8].startswith(b"#EXTM3U")
     )
     if looks_like_playlist and r.status_code == 200:
-        base = url.rsplit("/", 1)[0] + "/"
-
-        def fix(line: str) -> str:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                return line
-            seg = line if line.startswith(("http://", "https://")) else base + line
-            return f"/proxy_segment?url={seg}&referer={referer or ''}"
-
-        out = "\n".join(fix(l) for l in r.text.splitlines())
+        out = _rewrite_playlist(r.text, url, referer)
         return Response(
             content=out,
             media_type="application/vnd.apple.mpegurl",
@@ -220,21 +239,61 @@ async def fetch_url(u: str = Query(...), ref: str | None = None):
     )
 
 
+# animepahe website-API relay. The app's /ap?m=search|release|links calls are
+# the animepahe site's own JSON API shape (animepahe.com/api?m=...); the old
+# api.animepahe.ru was just a relay mirror of it and is gone. The site is
+# Cloudflare-fronted, but our curl_cffi chrome impersonation passes it.
+# Official mirrors rotate (.pw/.com/.org) — override via ANIMEPAHE_SITES.
+ANIMEPAHE_SITES = [
+    s.strip().rstrip("/")
+    for s in os.environ.get(
+        "ANIMEPAHE_SITES",
+        "https://animepahe.com,https://animepahe.org,https://animepahe.pw",
+    ).split(",")
+    if s.strip()
+]
+
+
 @app.get("/ap")
-async def animepahe(m: str = Query(...), q: str = Query(default=""), id: str | None = None):
-    """animepahe search & episode-list passthrough (api.animepahe.ru)."""
-    base = "https://api.animepahe.ru"
-    url = f"{base}/search/{q}" if m == "search" else f"{base}/episodes/{id or q}"
-    try:
-        r = await _get(url, "https://animepahe.ru/", 30.0)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
-    return Response(
-        content=r.content,
-        status_code=r.status_code,
-        media_type="application/json",
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
+async def animepahe(
+    m: str = Query(...),
+    q: str = Query(default=""),
+    id: str | None = None,
+    sort: str | None = None,
+    page: int | None = None,
+    p: str | None = None,
+):
+    """animepahe /api passthrough — forwards every param the app sends
+    (m, q, id, sort, page, p) and rotates the official mirrors."""
+    params: dict = {"m": m, "q": q}
+    if id is not None:
+        params["id"] = id
+    if sort is not None:
+        params["sort"] = sort
+    if page is not None:
+        params["page"] = page
+    if p is not None:
+        params["p"] = p
+    qs = urlencode(params)
+    last_err = "no animepahe mirror responded"
+    for base in ANIMEPAHE_SITES:
+        try:
+            r = await _get(f"{base}/api?{qs}", f"{base}/", 30.0)
+        except Exception as e:
+            last_err = str(e)
+            continue
+        # Cloudflare may challenge one mirror but not another — rotate on
+        # challenge-ish statuses instead of giving up after the first.
+        if r.status_code in (403, 429, 503):
+            last_err = f"{base} -> HTTP {r.status_code}"
+            continue
+        return Response(
+            content=r.content,
+            status_code=r.status_code,
+            media_type="application/json",
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    return JSONResponse({"error": last_err}, status_code=502)
 
 
 @app.get("/kwik")
