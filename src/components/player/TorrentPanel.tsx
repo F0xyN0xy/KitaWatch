@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { AlertTriangle, Loader2, Magnet, Search } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2, Magnet, Search } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import { searchNyaa, type NyaaResult } from '@/services/nyaa';
+import { searchNyaa, nyaaSearchUrl, type NyaaResult } from '@/services/nyaa';
 import { startTorrentStream } from '@/services/torrent';
 
 interface Props {
@@ -75,6 +75,15 @@ export default function TorrentPanel({ animeTitle, onStream }: Props) {
           )}
           Search Nyaa
         </Button>
+        <a
+          href={nyaaSearchUrl(query || animeTitle)}
+          target="_blank"
+          rel="noreferrer"
+          title="Open this search on nyaa.si in your browser"
+          className="flex items-center rounded-lg bg-ink-800 px-3 py-2 text-xs text-zinc-300 ring-1 ring-white/10 transition hover:text-white hover:ring-accent-500/50"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
       </div>
 
       {error && (

@@ -68,6 +68,8 @@ export default function Home() {
       h.duration ? (h.position ?? 0) / h.duration : undefined,
     ]),
   );
+  // Clicking a Continue Watching card resumes the latest episode.
+  const episodeById = new Map(historyEntries.map((h) => [h.animeId, h.episode]));
 
   const latestWatch = historyEntries[0];
   // Async fetcher — NOT a promise chain. a .catch() on a method call can
@@ -106,6 +108,8 @@ export default function Home() {
           title="Continue Watching"
           items={continueWatching}
           getProgress={(a) => progressById.get(a.id)}
+          getHref={(a) => `/watch/${a.id}/${episodeById.get(a.id) ?? 1}`}
+          getBadge={(a) => `E${episodeById.get(a.id) ?? 1}`}
         />
       )}
 

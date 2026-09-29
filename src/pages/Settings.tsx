@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bug, Github, LogOut, MessageSquareWarning, RefreshCw, Trash2 } from 'lucide-react';
+import { Bug, Gamepad2, Github, LogOut, MessageSquareWarning, RefreshCw, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Disclaimer from '@/components/ui/Disclaimer';
@@ -9,6 +9,7 @@ import { useAnimeStore } from '@/stores/animeStore';
 import { anilist, startAniListOAuth } from '@/services/anilist';
 import { completeLogin, markLoginPending, setAuthNotifier } from '@/services/authFlow';
 import { getDebugReport } from '@/services/debug';
+import { setFullscreenRemember } from '@/services/windowState';
 
 const QUALITIES: Quality[] = ['auto', '1080p', '720p', '480p'];
 
@@ -48,8 +49,10 @@ export default function Settings() {
     enableConsumetFallback,
     setConsumetBaseUrl,
     setEnableConsumetFallback,
-    showAdultContent,
-    setShowAdultContent,
+    rememberFullscreen,
+    setRememberFullscreen,
+    discordRichPresence,
+    setDiscordRichPresence,
   } = useSettingsStore();
 
   const { accessToken, viewer, clear } = useAuthStore();
@@ -228,16 +231,38 @@ export default function Settings() {
         </div>
       </Section>
 
-      <Section title="Content">
+      <Section title="Window">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-zinc-300">Show adult content (18+)</p>
+            <p className="text-sm text-zinc-300">Remember fullscreen</p>
             <p className="text-xs text-zinc-600">
-              Hentai is hidden from search and discovery by default — searching
-              for it by name or picking the Hentai genre still shows it
+              Re-open KitaWatch (and the player) fullscreen if it was fullscreen
+              when you closed it
             </p>
           </div>
-          <Toggle on={showAdultContent} onChange={setShowAdultContent} />
+          <Toggle
+            on={rememberFullscreen}
+            onChange={(v) => {
+              setRememberFullscreen(v);
+              setFullscreenRemember(v);
+            }}
+          />
+        </div>
+      </Section>
+
+      <Section title="Discord Activity">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm text-zinc-300">
+              <Gamepad2 className="h-4 w-4 text-zinc-500" /> Show what you're watching
+            </p>
+            <p className="text-xs text-zinc-600">
+              Rich presence: title + episode while the player is open. Always
+              shown under the KitaWatch activity — no setup needed. Only shows
+              while Discord is running.
+            </p>
+          </div>
+          <Toggle on={discordRichPresence} onChange={setDiscordRichPresence} />
         </div>
       </Section>
 
@@ -301,7 +326,7 @@ export default function Settings() {
       </Section>
 
       <Section title="About">
-        <p className="text-sm text-zinc-400">KitaWatch v0.7.1</p>
+        <p className="text-sm text-zinc-400">KitaWatch v0.6.4</p>
         <div className="flex flex-wrap gap-2">
           <a
             href="https://github.com/F0xyN0xy/KitaWatch/issues"

@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { completeLogin, isLoginPending } from '@/services/authFlow';
+import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { Download, X } from 'lucide-react';
 
@@ -46,6 +47,9 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     const cleanups: (() => void)[] = [];
+
+    // Restore saved fullscreen state (no-op outside Tauri).
+    void initWindowState();
 
     import('@tauri-apps/plugin-deep-link')
       .then(async (m) => {

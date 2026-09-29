@@ -8,9 +8,13 @@ import Badge from '@/components/ui/Badge';
 interface Props {
   anime: AnimeSummary;
   index?: number;
+  /** Override the default /anime/:id destination (e.g. resume playback). */
+  href?: string;
+  /** Small accent label shown on the cover (e.g. "E7"). */
+  badge?: string;
 }
 
-function AnimeCard({ anime, index = 0 }: Props) {
+function AnimeCard({ anime, index = 0, href, badge }: Props) {
   const rating = typeof anime.rating === 'number' ? anime.rating : undefined;
 
   // normalizeAnime falls back to id 0 when upstream IDs won't parse —
@@ -29,33 +33,13 @@ function AnimeCard({ anime, index = 0 }: Props) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.4), ease: 'easeOut' }}
     >
-      <Link to={`/anime/${anime.id}`} className="group block">
+      <Link to={href ?? `/anime/${anime.id}`} className="group block">
         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-ink-800 ring-1 ring-white/5 transition duration-300 group-hover:shadow-[0_0_28px_rgba(168,85,247,0.25)] group-hover:ring-accent-500/60">
           {anime.cover || anime.banner ? (
             <img
               src={anime.cover ?? anime.banner}
               alt={anime.title}
               loading="lazy"
-              referrerPolicy="no-referrer"
-              decoding="async"
-              onError={(e) => {
-                const img = e.currentTarget as HTMLImageElement;
-                // serveproxy.com fallback: decode original URL (Linux WebKit may block proxy)
-                if (img.src.includes('serveproxy.com')) {
-                  try {
-                    const u = new URL(img.src);
-                    const orig = u.searchParams.get('url');
-                    if (orig && orig !== img.src) {
-                      img.src = decodeURIComponent(orig);
-                      return;
-                    }
-                  } catch {}
-                }
-                // fallback to banner if cover failed
-                if (img.src === anime.cover && anime.banner) {
-                  img.src = anime.banner;
-                }
-              }}
               className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
             />
           ) : (
@@ -69,6 +53,11 @@ function AnimeCard({ anime, index = 0 }: Props) {
                 <Star className="h-3 w-3 fill-current" />
                 {rating.toFixed(1)}
               </Badge>
+            </div>
+          )}
+          {badge && (
+            <div className="absolute left-2 top-2">
+              <Badge variant="accent">{badge}</Badge>
             </div>
           )}
           <div className="absolute bottom-2 left-2 flex gap-1">

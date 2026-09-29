@@ -68,6 +68,14 @@ interface SettingsState {
    * (explicit name/genre searches always get through).
    */
   showAdultContent: boolean;
+  /** Show the current anime/episode as Discord activity. */
+  discordRichPresence: boolean;
+  /**
+   * Discord Application ID the rich presence connects with. Locked to
+   * KitaWatch's own application — presence works out of the box for every
+   * user (Settings only exposes an on/off toggle).
+   */
+  discordAppId: string;
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
   setProviderPriority: (order: string[]) => void;
@@ -79,6 +87,7 @@ interface SettingsState {
   setRememberFullscreen: (v: boolean) => void;
   setLastFullscreen: (v: boolean) => void;
   setShowAdultContent: (v: boolean) => void;
+  setDiscordRichPresence: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -98,6 +107,10 @@ export const useSettingsStore = create<SettingsState>()(
       rememberFullscreen: true,
       lastFullscreen: false,
       showAdultContent: false,
+      // Rich presence is on by default and always uses KitaWatch's own
+      // Discord application — users never need a Developer Portal app.
+      discordRichPresence: true,
+      discordAppId: '1553307716758536202',
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
       setProviderPriority: (providerPriority) => set({ providerPriority }),
@@ -110,10 +123,11 @@ export const useSettingsStore = create<SettingsState>()(
       setRememberFullscreen: (rememberFullscreen) => set({ rememberFullscreen }),
       setLastFullscreen: (lastFullscreen) => set({ lastFullscreen }),
       setShowAdultContent: (showAdultContent) => set({ showAdultContent }),
+      setDiscordRichPresence: (discordRichPresence) => set({ discordRichPresence }),
     }),
     {
       name: 'kitawatch-settings',
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -138,6 +152,12 @@ export const useSettingsStore = create<SettingsState>()(
         // key is absent in older persisted states, so it falls through to
         // the false default above — upgrades get the safe default too.
         // Nothing to rewrite here.
+        if (version < 5) {
+          // Rich presence became built-in: lock to the shared KitaWatch
+          // Discord application ID so no user needs their own app.
+          if (!s.discordAppId) s.discordAppId = '1553307716758536202';
+          if (s.discordRichPresence == null) s.discordRichPresence = true;
+        }
         return s as SettingsState;
       },
     },

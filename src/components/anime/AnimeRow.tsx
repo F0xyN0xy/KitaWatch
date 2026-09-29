@@ -10,9 +10,13 @@ interface Props {
   loading?: boolean;
   /** #7: watched fraction (0..1) per item — renders a progress bar (Continue Watching). */
   getProgress?: (a: AnimeSummary) => number | undefined;
+  /** Per-item link override (e.g. Continue Watching resumes the episode). */
+  getHref?: (anime: AnimeSummary) => string | undefined;
+  /** Per-item cover label (e.g. "E7"). */
+  getBadge?: (anime: AnimeSummary) => string | undefined;
 }
 
-export default function AnimeRow({ title, items, loading, getProgress }: Props) {
+export default function AnimeRow({ title, items, loading, getProgress, getHref, getBadge }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: 1 | -1) =>
@@ -51,7 +55,7 @@ export default function AnimeRow({ title, items, loading, getProgress }: Props) 
           const p = getProgress?.(a);
           return (
             <div key={a.id} className="relative w-[150px] shrink-0 sm:w-[170px]">
-              <AnimeCard anime={a} index={i} />
+              <AnimeCard anime={a} index={i} href={getHref?.(a)} badge={getBadge?.(a)} />
               {p != null && p > 0 && (
                 <div className="pointer-events-none absolute bottom-1.5 left-2 right-2 h-1 overflow-hidden rounded-full bg-white/20">
                   <div

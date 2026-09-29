@@ -17,7 +17,9 @@ import type { StreamSource } from '@/types';
  */
 
 const CACHE_TTL_MS = 5 * 60_000;
-const TIMEOUT_MS = 4000;
+// 8s — 4s produced false "dead" verdicts on busy proxy/hosts that play fine,
+// which made live sources disappear from the list when late providers merged.
+const TIMEOUT_MS = 8000;
 const CONCURRENCY = 4;
 
 const cache = new Map<string, { at: number; ok: boolean | undefined }>();
