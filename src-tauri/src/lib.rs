@@ -1,6 +1,7 @@
 mod api_sidecar;
 mod commands;
 mod config;
+mod discord;
 mod proc_group;
 use tauri::Manager;
 
@@ -25,6 +26,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::exchange_anilist_token,
             commands::collect_debug_report,
+            commands::discord_presence_set,
+            commands::discord_presence_clear,
         ]);
 
     builder
@@ -35,6 +38,8 @@ pub fn run() {
             } else {
                 config::load();
             }
+            // Initialize Discord Rich Presence (uses hardcoded KitaWatch app ID)
+            crate::discord::init("1553307716758536202");
 
             {
                 use tauri_plugin_deep_link::DeepLinkExt;

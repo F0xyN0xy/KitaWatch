@@ -129,6 +129,17 @@ fn tail(path: &std::path::Path, max_lines: usize) -> String {
 }
 
 #[tauri::command]
+pub fn discord_presence_set(app_id: String, details: String, state: Option<String>, start: Option<i64>) {
+    crate::discord::init(&app_id);
+    crate::discord::set(&details, state.as_deref(), start);
+}
+
+#[tauri::command]
+pub fn discord_presence_clear() {
+    crate::discord::clear();
+}
+
+#[tauri::command]
 pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, String> {
     if let Ok(res_dir) = app.path().resource_dir() {
         crate::config::load_with_resource_dir(&res_dir);
