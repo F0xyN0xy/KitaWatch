@@ -24,6 +24,9 @@ interface AnimeState {
   renameList: (id: string, name: string) => void;
   deleteList: (id: string) => void;
   addToList: (listId: string, anime: AnimeSummary) => void;
+  /** Add or UPDATE an entry: if the anime id already exists in the list its
+   *  data is replaced (upgrades placeholder entries to real metadata). */
+  upsertToList: (listId: string, anime: AnimeSummary) => void;
   removeFromList: (listId: string, animeId: number) => void;
   isInList: (listId: string, animeId: number) => boolean;
 }
@@ -83,6 +86,22 @@ export const useAnimeStore = create<AnimeState>()(
               ? { ...l, anime: [anime, ...l.anime] }
               : l,
           ),
+        })),
+      upsertToList: (listId, anime) =>
+        set((s) => ({
+          customLists: s.customLists.map((l) => {
+            if (l.id !== listId) return l;
+            const idx = l.anime.findIndex((a) => a.id === anime.id);
+            if (idx === -1) {
+              // Not present — prepend like addToList
+              return { ...l, anime: [anime, ...l.anime] };
+            }
+            // Present — replace in-place so placeholder data gets upgraded
+            // to real metadata (title, cover, etc.) on re-import.
+            const next = [...l.anime];
+            next[idx] = anime;
+            return { ...l, anime: next };
+          }),
         })),
       removeFromList: (listId, animeId) =>
         set((s) => ({

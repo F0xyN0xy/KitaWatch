@@ -19,7 +19,6 @@ proxy/__pycache__/
 
 # local env / secrets — never commit
 .env
-.env.*
 gate-db.json*
 
 binaries*

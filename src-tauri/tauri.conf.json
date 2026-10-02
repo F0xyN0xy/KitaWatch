@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.anilist.co; connect-src 'self' https://graphql.anilist.co https://*.anilist.co"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.anilist.co https://i.anilist.co https://s4.anilist.co http://localhost:* http://127.0.0.1:*; media-src 'self' blob: http://localhost:* http://127.0.0.1:* https:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* wss://localhost:* https://graphql.anilist.co https://*.anilist.co https://api.aniskip.com wss://api.aniskip.com https://nyaa.si https://*.nyaa.si; font-src 'self' data:"
     }
   },
   "bundle": {
@@ -41,7 +41,9 @@
       "binaries/kitawatch-proxy",
       "binaries/kitawatch-anivexa"
     ],
-    "resources": [],
+    "resources": [
+      ".env.example"
+    ],
     "linux": {
       "deb": {
         "depends": [
