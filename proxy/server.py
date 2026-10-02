@@ -118,7 +118,8 @@ async def cors(u: str = Query(...), ref: str | None = None):
     try:
         r = await _get(u, ref, 30.0)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        print(f"[proxy error] {e}")
+        return JSONResponse({"error": "proxy request failed"}, status_code=502)
     return Response(
         content=r.content,
         status_code=r.status_code,
@@ -140,7 +141,8 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
     try:
         r = await _get(url, referer, 30.0)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        print(f"[proxy error] {e}")
+        return JSONResponse({"error": "proxy request failed"}, status_code=502)
     if r.status_code != 200:
         return Response(
             content=r.content,
@@ -192,7 +194,8 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
     try:
         r = await _get(url, referer, 60.0)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        print(f"[proxy error] {e}")
+        return JSONResponse({"error": "proxy request failed"}, status_code=502)
 
     ctype = r.headers.get("content-type", "")
     looks_like_playlist = (
@@ -230,7 +233,8 @@ async def fetch_url(u: str = Query(...), ref: str | None = None):
     try:
         r = await _get(u, ref, 30.0)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        print(f"[proxy error] {e}")
+        return JSONResponse({"error": "proxy request failed"}, status_code=502)
     return Response(
         content=r.content,
         status_code=r.status_code,
@@ -280,7 +284,8 @@ async def animepahe(
         try:
             r = await _get(f"{base}/api?{qs}", f"{base}/", 30.0)
         except Exception as e:
-            last_err = str(e)
+            last_err = "animepahe mirror failed"
+            print(f"[proxy animepahe error] {e}")
             continue
         # Cloudflare may challenge one mirror but not another — rotate on
         # challenge-ish statuses instead of giving up after the first.
@@ -304,7 +309,8 @@ async def kwik(u: str = Query(...)):
     try:
         r = await _get(u, "https://kwik.si/", 30.0)
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
+        print(f"[proxy error] {e}")
+        return JSONResponse({"error": "proxy request failed"}, status_code=502)
     return Response(
         content=r.content,
         status_code=r.status_code,
