@@ -87,6 +87,9 @@ export async function completeLogin(raw: string): Promise<boolean> {
   }
 
   // Case 2: kitawatch://auth?code=... callback URL
+  // Whitelist: only allow http(s) URLs and the app's deep-link scheme
+  const allowedProtocols = ['http:', 'https:', 'kitawatch:'];
+  const allowedHosts = ['auth', 'anilist.co', 'graphql.anilist.co', 'www.anilist.co'];
   let url: URL;
   try {
     url = new URL(input);
@@ -94,7 +97,12 @@ export async function completeLogin(raw: string): Promise<boolean> {
     notify('Could not parse that as a URL or token');
     return false;
   }
-  if (url.hostname !== 'auth') {
+  // Validate protocol and host against whitelist
+  if (!allowedProtocols.includes(url.protocol)) {
+    notify('Invalid URL protocol');
+    return false;
+  }
+  if (!allowedHosts.includes(url.hostname)) {
     notify('That is not a KitaWatch auth callback URL');
     return false;
   }

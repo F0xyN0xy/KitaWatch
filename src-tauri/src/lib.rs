@@ -42,7 +42,7 @@ pub fn run() {
                     eprintln!("[kitawatch] warning: failed to register deep links: {e}");
                     // Linux: deep-link registration needs a .desktop file; log but don't fail
                     #[cfg(target_os = "linux")]
-                    eprintln!("[kitawatch] hint: on Linux the kitawatch:// scheme requires the .desktop file to be installed (deb does this automatically)");
+                    eprintln!("[kitawatch] hint: on Linux the kitawatch:// scheme requires the .desktop file to be installed (deb does this automatically). If login fails, use the pin-flow at https://anilist.co/api/v2/oauth/pin and paste the token.");
                 }
             }
 
