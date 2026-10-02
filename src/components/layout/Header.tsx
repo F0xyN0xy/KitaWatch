@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Clock, Search, UserRound, X } from 'lucide-react';
+import { Clock, Search, UserRound, X, Bell } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { useAuthStore } from '@/stores/authStore';
@@ -180,6 +180,11 @@ export default function Header() {
           </div>
         )}
       </div>
+
+      {/* Notification / Updates icon — LEFT of profile */}
+      <Link to="/settings" title="Updates & Lists" className="mr-2 flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-ink-850 hover:text-accent-400 transition">
+        <Bell className="h-4 w-4" />
+      </Link>
 
       {/* AniList account */}
       <div className="ml-auto">

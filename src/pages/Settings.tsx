@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bug, Gamepad2, Github, LogOut, MessageSquareWarning, RefreshCw, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
+import UpdatesPanel from '@/components/UpdatesPanel';
 import Disclaimer from '@/components/ui/Disclaimer';
 import { useSettingsStore, type Quality } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -347,6 +348,7 @@ export default function Settings() {
         </div>
         <Disclaimer />
       </Section>
+      <UpdatesPanel />
     </PageContainer>
   );
 }

@@ -41,9 +41,7 @@
       "binaries/kitawatch-proxy",
       "binaries/kitawatch-anivexa"
     ],
-    "resources": [
-      ".env.example"
-    ],
+    "resources": [],
     "linux": {
       "deb": {
         "depends": [
