@@ -84,6 +84,7 @@ pub fn load_with_resource_dir(resource_dir: &std::path::Path) {
     load();
 }
 
+#[allow(unused)]
 pub fn get_var(key: &str) -> Result<String, String> {
     env::var(key).map_err(|_| format!("{} is not configured", key))
 }

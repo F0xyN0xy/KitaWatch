@@ -51,6 +51,8 @@ DEFAULT_ALLOWLIST = {
     "krussdomi.com",    # krussdomi (hls.krussdomi.com)
     "roburnt10.store",  # echovideo (st3.roburnt10.store)
     "r66nv9ed.com",     # gn1r5n / anikage servers (edge*.r66nv9ed.com)
+    "mkissa.to",        # mkissa mirror
+    "animedunya.in",    # animedunya provider
 }
 
 # Optional operator override: comma-separated extra hosts.

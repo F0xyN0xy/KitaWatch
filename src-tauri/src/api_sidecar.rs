@@ -35,6 +35,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::Manager;
 
+#[allow(dead_code)]
 pub enum Proc {
     Dev(Child),
     #[cfg(not(debug_assertions))]
@@ -52,6 +53,7 @@ fn port_open(addr: &str) -> bool {
     }
 }
 
+#[allow(unused)]
 fn python() -> String {
     std::env::var("KITAWATCH_PYTHON").unwrap_or_else(|_| {
         if cfg!(windows) {
@@ -62,6 +64,7 @@ fn python() -> String {
     })
 }
 
+#[allow(unused)]
 fn find_dir(env_var: &str, markers: &[&str]) -> Option<PathBuf> {
     if let Ok(dir) = std::env::var(env_var) {
         let p = PathBuf::from(&dir);
