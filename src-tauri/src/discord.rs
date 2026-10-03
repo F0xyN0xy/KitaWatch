@@ -1,76 +1,149 @@
-//! Discord Rich Presence via direct local socket (pure std, no crate).
-use std::io::{Write};
-use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
-use std::sync::OnceLock;
+//! Discord Rich Presence via discord-rich-presence crate.
+use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
+use std::sync::Mutex;
 
-pub struct DiscordPresence {
-    app_id: String,
+static DISCORD_CLIENT: Mutex<Option<DiscordIpcClient>> = Mutex::new(None);
+
+fn log(msg: &str) {
+    eprintln!("[discord] {}", msg);
 }
-
-impl DiscordPresence {
-    pub fn new(app_id: &str) -> Self {
-        Self { app_id: app_id.to_string() }
-    }
-    pub fn set(&self, details: &str, state: Option<&str>, _start: Option<i64>) {
-        for port in 6463..=6472 {
-            if let Ok(mut stream) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
-                stream.set_nonblocking(false).ok();
-                let handshake = format!(r#"{{"v":1,"client_id":"{}"}}"#, self.app_id);
-                let payload_json = serde_json::json!({
-                    "cmd": "SET_ACTIVITY",
-                    "args": {
-                        "pid": std::process::id(),
-                        "activity": {
-                            "details": details,
-                            "state": state.unwrap_or("Watching anime"),
-                            "assets": {
-                                "large_image": "logo",
-                                "large_text": "KitaWatch"
-                            }
-                        }
-                    }
-                });
-                let payload = payload_json.to_string();
-                let msg = format!("{}{}", handshake.len(), handshake);
-                let _ = stream.write_all(msg.as_bytes());
-                let _ = stream.write_all(payload.as_bytes());
-                break;
-            }
-        }
-    }
-    pub fn clear(&self) {
-        for port in 6463..=6472 {
-            if let Ok(mut stream) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
-                stream.set_nonblocking(false).ok();
-                let handshake = format!(r#"{{"v":1,"client_id":"{}"}}"#, self.app_id);
-                let payload = r#"{"cmd":"SET_ACTIVITY","args":{"pid":0},"activity":{"details":"","state":"","assets":{"large_image":"","large_text":""}}}"#;
-                let msg = format!("{}{}", handshake.len(), handshake);
-                let _ = stream.write_all(msg.as_bytes());
-                let _ = stream.write_all(payload.as_bytes());
-            }
-        }
-    }
-}
-
-static PRESENCE: OnceLock<Arc<Mutex<DiscordPresence>>> = OnceLock::new();
 
 pub fn init(app_id: &str) {
-    let _ = PRESENCE.set(Arc::new(Mutex::new(DiscordPresence::new(app_id))));
+    let mut guard = match DISCORD_CLIENT.lock() {
+        Ok(g) => g,
+        Err(_) => {
+            log("ERROR: mutex poisoned in init");
+            return;
+        }
+    };
+
+    // Already initialized
+    if guard.is_some() {
+        log("already initialized, skipping");
+        return;
+    }
+
+    log(&format!("init: connecting with app_id={}", app_id));
+    match DiscordIpcClient::new(app_id) {
+        Ok(mut client) => {
+            match client.connect() {
+                Ok(_) => {
+                    log("init: connected successfully");
+                    *guard = Some(client);
+                }
+                Err(e) => {
+                    log(&format!("init: connect FAILED - {}", e));
+                }
+            }
+        }
+        Err(e) => {
+            log(&format!("init: client creation FAILED - {}", e));
+        }
+    }
 }
 
 pub fn set(details: &str, state: Option<&str>, start: Option<i64>) {
-    if let Some(presence) = PRESENCE.get() {
-        if let Ok(p) = presence.lock() {
-            p.set(details, state, start);
+    let mut guard = match DISCORD_CLIENT.lock() {
+        Ok(g) => g,
+        Err(_) => {
+            log("ERROR: mutex poisoned in set");
+            return;
+        }
+    };
+
+    // Initialize if needed (Discord might not have been running at startup)
+    if guard.is_none() {
+        log("set: not initialized, attempting lazy init");
+        match DiscordIpcClient::new("1553307716758536202") {
+            Ok(mut client) => {
+                match client.connect() {
+                    Ok(_) => {
+                        log("set: lazy init connected");
+                        *guard = Some(client);
+                    }
+                    Err(e) => {
+                        log(&format!("set: lazy init connect FAILED - {}", e));
+                        return;
+                    }
+                }
+            }
+            Err(e) => {
+                log(&format!("set: lazy init client creation FAILED - {}", e));
+                return;
+            }
+        }
+    }
+
+    let client = match guard.as_mut() {
+        Some(c) => c,
+        None => {
+            log("set: no client available");
+            return;
+        }
+    };
+
+    let mut act = activity::Activity::new().details(details);
+
+    if let Some(s) = state {
+        act = act.state(s);
+    }
+
+    if let Some(ts) = start {
+        act = act.timestamps(activity::Timestamps::new().start(ts));
+    }
+
+    log(&format!("set: setting activity details={:?} state={:?}", details, state));
+
+    // Try to set activity; reconnect on failure
+    match client.set_activity(act.clone()) {
+        Ok(_) => {
+            log("set: activity set successfully");
+        }
+        Err(e) => {
+            log(&format!("set: set_activity FAILED - {}, attempting reconnect", e));
+            let app_id = client.client_id.clone();
+
+            match DiscordIpcClient::new(&app_id) {
+                Ok(mut new_client) => {
+                    match new_client.connect() {
+                        Ok(_) => {
+                            match new_client.set_activity(act) {
+                                Ok(_) => {
+                                    log("set: reconnect + activity set successfully");
+                                    *guard = Some(new_client);
+                                }
+                                Err(e2) => {
+                                    log(&format!("set: reconnect set_activity FAILED - {}", e2));
+                                }
+                            }
+                        }
+                        Err(e2) => {
+                            log(&format!("set: reconnect connect FAILED - {}", e2));
+                        }
+                    }
+                }
+                Err(e2) => {
+                    log(&format!("set: reconnect client creation FAILED - {}", e2));
+                }
+            }
         }
     }
 }
 
 pub fn clear() {
-    if let Some(presence) = PRESENCE.get() {
-        if let Ok(p) = presence.lock() {
-            p.clear();
+    let mut guard = match DISCORD_CLIENT.lock() {
+        Ok(g) => g,
+        Err(_) => {
+            log("ERROR: mutex poisoned in clear");
+            return;
         }
+    };
+
+    if let Some(ref mut client) = *guard {
+        let _ = client.clear_activity();
+        let _ = client.close();
+        log("clear: activity cleared");
     }
+
+    *guard = None;
 }

@@ -9,8 +9,8 @@ const send = async (cmd: string, args: Record<string, unknown>) => {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke(cmd, args);
-  } catch {
-    /* Discord not running / not in Tauri — fine */
+  } catch (e) {
+    console.warn('[discord] invoke failed:', cmd, e);
   }
 };
 
@@ -22,7 +22,7 @@ export function setDiscordPresence(details: string, state?: string): void {
     appId: discordAppId,
     details,
     state: state ?? null,
-    startUnix: Math.floor(Date.now() / 1000),
+    start: Math.floor(Date.now() / 1000),
   });
 }
 

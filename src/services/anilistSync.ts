@@ -169,7 +169,7 @@ const NOTIFICATIONS_QUERY = `
 query ($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { hasNextPage }
-    notifications: notification {
+    notifications {
       ... on AiringNotification {
         id
         type
@@ -225,7 +225,7 @@ query ($page: Int, $perPage: Int) {
         id
         type
         createdAt
-        deletedMediaTitle: contexts
+        deletedMediaTitle: context
       }
     }
   }
@@ -252,7 +252,7 @@ export interface AniNotification {
     avatar?: { large?: string } | null;
   } | null;
   /** MediaDeletionNotification */
-  deletedMediaTitle?: string[];
+  deletedMediaTitle?: string;
 }
 
 export async function fetchNotifications(token: string, perPage = 15): Promise<AniNotification[]> {

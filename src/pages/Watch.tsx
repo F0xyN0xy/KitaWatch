@@ -120,10 +120,16 @@ export default function Watch() {
   }, [info.data, id, epNum]);
 
   // Discord activity: "Watching <title>" / "Episode N". Cleared on unmount.
+  // Re-sends every 15s to win priority over other RPC clients (e.g. VS Code).
   useEffect(() => {
     if (!info.data?.title) return;
-    setDiscordPresence(`Watching ${info.data.title}`, `Episode ${epNum}`);
-    return () => clearDiscordPresence();
+    const update = () => setDiscordPresence(`Watching ${info.data!.title}`, `Episode ${epNum}`);
+    update();
+    const interval = setInterval(update, 15_000);
+    return () => {
+      clearInterval(interval);
+      clearDiscordPresence();
+    };
   }, [info.data?.title, epNum]);
 
   const totalEpisodes = info.data?.totalEpisodes;

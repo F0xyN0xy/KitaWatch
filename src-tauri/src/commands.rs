@@ -129,17 +129,6 @@ fn tail(path: &std::path::Path, max_lines: usize) -> String {
 }
 
 #[tauri::command]
-pub fn discord_presence_set(app_id: String, details: String, state: Option<String>, start: Option<i64>) {
-    crate::discord::init(&app_id);
-    crate::discord::set(&details, state.as_deref(), start);
-}
-
-#[tauri::command]
-pub fn discord_presence_clear() {
-    crate::discord::clear();
-}
-
-#[tauri::command]
 pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, String> {
     if let Ok(res_dir) = app.path().resource_dir() {
         crate::config::load_with_resource_dir(&res_dir);
@@ -315,4 +304,66 @@ pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, Strin
     }
 
     Ok(r)
+}
+
+// ─── Discord Rich Presence ──────────────────────────────────────────────────
+
+use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
+use std::sync::Mutex;
+
+static DISCORD_CLIENT: Mutex<Option<DiscordIpcClient>> = Mutex::new(None);
+
+#[tauri::command]
+pub fn discord_presence_set(
+    app_id: String,
+    details: String,
+    state: Option<String>,
+    start_unix: Option<i64>,
+) -> Result<(), String> {
+    let mut guard = DISCORD_CLIENT.lock().map_err(|e| e.to_string())?;
+
+    if guard.is_none() {
+        let mut client = DiscordIpcClient::new(&app_id).map_err(|e| e.to_string())?;
+        client.connect().map_err(|e| e.to_string())?;
+        *guard = Some(client);
+    }
+
+    let client = guard.as_mut().ok_or("Discord client not initialized")?;
+
+    let mut act = activity::Activity::new().details(&details);
+
+    if let Some(ref s) = state {
+        act = act.state(s);
+    }
+
+    if let Some(ts) = start_unix {
+        act = act.timestamps(activity::Timestamps::new().start(ts));
+    }
+
+    if client.set_activity(act).is_err() {
+        let mut client = DiscordIpcClient::new(&app_id).map_err(|e| e.to_string())?;
+        client.connect().map_err(|e| e.to_string())?;
+        let mut act = activity::Activity::new().details(&details);
+        if let Some(ref s) = state {
+            act = act.state(s);
+        }
+        if let Some(ts) = start_unix {
+            act = act.timestamps(activity::Timestamps::new().start(ts));
+        }
+        client.set_activity(act).map_err(|e| e.to_string())?;
+        *guard = Some(client);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn discord_presence_clear() -> Result<(), String> {
+    let mut guard = DISCORD_CLIENT.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut client) = *guard {
+        let _ = client.clear_activity();
+        let _ = client.close();
+    }
+    *guard = None;
+    Ok(())
 }
