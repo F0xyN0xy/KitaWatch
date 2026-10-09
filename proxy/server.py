@@ -53,6 +53,10 @@ DEFAULT_ALLOWLIST = {
     "r66nv9ed.com",     # gn1r5n / anikage servers (edge*.r66nv9ed.com)
     "mkissa.to",        # mkissa mirror
     "animedunya.in",    # animedunya provider
+    # hentai providers
+    "hanime.tv",
+    "hstream.moe",
+    "hentaiocean.com",
 }
 
 # Optional operator override: comma-separated extra hosts.
@@ -113,7 +117,8 @@ async def _get(url: str, referer: str | None, timeout: float):
 
 
 @app.get("/cors")
-async def cors(u: str = Query(...), ref: str | None = None):
+@app.head("/cors")
+async def cors(u: str = Query(...), ref: str | None = None, request: object = None):
     """Generic CORS-safe fetch: returns the body, streams binary."""
     if not host_allowed(u):
         return JSONResponse({"error": "host not allowed"}, status_code=403)

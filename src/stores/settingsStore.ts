@@ -68,6 +68,12 @@ interface SettingsState {
    * (explicit name/genre searches always get through).
    */
   showAdultContent: boolean;
+  /**
+   * Push watch progress for adult (H) anime to AniList. Default off —
+   * independent from showAdultContent so a user can browse H titles
+   * without ever writing them to their public AniList history.
+   */
+  updateAdultProgress: boolean;
   /** Show the current anime/episode as Discord activity. */
   discordRichPresence: boolean;
   /**
@@ -87,6 +93,7 @@ interface SettingsState {
   setRememberFullscreen: (v: boolean) => void;
   setLastFullscreen: (v: boolean) => void;
   setShowAdultContent: (v: boolean) => void;
+  setUpdateAdultProgress: (v: boolean) => void;
   setDiscordRichPresence: (v: boolean) => void;
 }
 
@@ -107,6 +114,10 @@ export const useSettingsStore = create<SettingsState>()(
       rememberFullscreen: true,
       lastFullscreen: false,
       showAdultContent: false,
+      // Never push adult-title progress to AniList unless the user
+      // explicitly opts in — H entries would otherwise land in their
+      // public activity feed the moment the toggle above is flipped.
+      updateAdultProgress: false,
       // Rich presence is on by default and always uses KitaWatch's own
       // Discord application — users never need a Developer Portal app.
       discordRichPresence: true,
@@ -123,11 +134,12 @@ export const useSettingsStore = create<SettingsState>()(
       setRememberFullscreen: (rememberFullscreen) => set({ rememberFullscreen }),
       setLastFullscreen: (lastFullscreen) => set({ lastFullscreen }),
       setShowAdultContent: (showAdultContent) => set({ showAdultContent }),
+      setUpdateAdultProgress: (updateAdultProgress) => set({ updateAdultProgress }),
       setDiscordRichPresence: (discordRichPresence) => set({ discordRichPresence }),
     }),
     {
       name: 'kitawatch-settings',
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -158,6 +170,9 @@ export const useSettingsStore = create<SettingsState>()(
           if (!s.discordAppId) s.discordAppId = '1553307716758536202';
           if (s.discordRichPresence == null) s.discordRichPresence = true;
         }
+        // v6 introduced updateAdultProgress (AniList progress for H titles).
+        // Absent in older persisted states — the false default above applies,
+        // so upgrades keep the safe default. Nothing to rewrite.
         return s as SettingsState;
       },
     },

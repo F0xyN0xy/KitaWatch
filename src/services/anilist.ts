@@ -94,6 +94,8 @@ query ($id: Int) {
     season
     seasonYear
     episodes
+    isAdult
+    nextAiringEpisode { episode airingAt }
     startDate { year month day }
     studios(isMain: true) { nodes { name } }
   }
@@ -185,6 +187,8 @@ interface RawMedia {
   season?: string;
   seasonYear?: number | null;
   episodes?: number | null;
+  isAdult?: boolean;
+  nextAiringEpisode?: { episode?: number | null; airingAt?: number | null } | null;
   startDate?: { year?: number | null };
   studios?: { nodes?: { name?: string }[] };
 }
@@ -199,6 +203,12 @@ export const anilist = {
     return {
       id: m.id,
       title: m.title?.english ?? m.title?.romaji ?? m.title?.native ?? 'Unknown title',
+      // All variants kept for the stream resolver's title verifier: providers
+      // index shows under romaji, English, or native (H titles especially are
+      // often only findable under one of the three).
+      altTitles: [m.title?.romaji, m.title?.english, m.title?.native].filter(
+        (t): t is string => !!t && t !== (m.title?.english ?? m.title?.romaji ?? m.title?.native),
+      ),
       cover: m.coverImage?.large ?? m.coverImage?.medium,
       banner: m.bannerImage ?? undefined,
       synopsis: m.description ? stripHtml(m.description) : undefined,
@@ -209,6 +219,14 @@ export const anilist = {
       season: m.season ?? undefined,
       year: m.seasonYear ?? undefined,
       totalEpisodes: m.episodes ?? undefined,
+      isAdult: m.isAdult === true,
+      // Next unaired episode (1-based) + unix timestamp. Drives the watch
+      // page's episode strip: episodes >= nextAiringEpisode.episode haven't
+      // aired yet and must not be clickable — clicking them used to send
+      // providers hunting for a nonexistent episode, and some returned a
+      // DIFFERENT anime's stream instead of a clean miss.
+      nextAiringEpisode: m.nextAiringEpisode?.episode ?? undefined,
+      nextAiringAt: m.nextAiringEpisode?.airingAt ?? undefined,
       releaseDate: m.startDate?.year ? String(m.startDate.year) : undefined,
       studios: m.studios?.nodes?.map((s) => s.name).filter((n): n is string => !!n),
     };

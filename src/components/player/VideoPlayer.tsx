@@ -6,6 +6,8 @@ import { proxy } from '@/services/api';
 import { useIntroSkip } from '@/hooks/useIntroSkip';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHistoryStore } from '@/stores/historyStore';
+import { pushProgress } from '@/services/progressSync';
+import { peekAnimeInfo } from '@/services/info';
 
 /* ASS subtitles via JASSub (libass WASM), loaded from CDN only when needed. */
 const JASSUB_BASE = 'https://cdn.jsdelivr.net/npm/jassub@1/dist/';
@@ -104,6 +106,7 @@ export default function VideoPlayer({
       callbacks.current.onFatal();
     };
 
+    const isEmbed = source.type === 'embed';
     const isHls = source.type === 'hls' || source.url.includes('.m3u8');
     const sub = subtitles?.[0];
     const subType = sub
@@ -138,6 +141,23 @@ export default function VideoPlayer({
       }
 
       if (!containerRef.current) return;
+
+      if (isEmbed) {
+        // Embed stream (hentai providers): load in an iframe instead of ArtPlayer
+        const iframe = document.createElement('iframe');
+        iframe.src = source.url;
+        iframe.allowFullscreen = true;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.style.backgroundColor = '#000';
+        containerRef.current.innerHTML = '';
+        containerRef.current.appendChild(iframe);
+        // Minimal cleanup
+        return () => {
+          containerRef.current!.innerHTML = '';
+        };
+      }
 
       art = new Artplayer({
         container: containerRef.current,
@@ -206,6 +226,10 @@ export default function VideoPlayer({
       instance.video.addEventListener('error', fail);
 
       instance.on('video:ended', () => {
+        // Episode finished: make sure the final position is on AniList even
+        // when autoplay is off (the next episode's onMeta would cover it
+        // otherwise, but only if the user clicks through).
+        pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
         if (autoplayNext && hasNextEpisode) callbacks.current.onEnded();
       });
 
@@ -251,6 +275,12 @@ export default function VideoPlayer({
           : null;
       const onMeta = () => {
         if (resumeAt != null) instance.currentTime = resumeAt;
+        // Real metadata => the stream is genuine (not a 403 page), so the
+        // user is actually watching this episode. Push to AniList now —
+        // "started ep N" is the progress AniList expects (progress = last
+        // watched). The monotonic guard in pushProgress de-dupes seeks and
+        // re-mounts; H titles are gated by the updateAdultProgress setting.
+        pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
       };
       instance.video.addEventListener('loadedmetadata', onMeta, { once: true });
       disposers.push(() => instance.video.removeEventListener('loadedmetadata', onMeta));

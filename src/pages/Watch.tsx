@@ -33,17 +33,51 @@ export default function Watch() {
   const autoplayNext = useSettingsStore((s) => s.autoplayNext);
 
   const info = useApi(() => fetchInfo(id!), [id]);
-  // Episode strip comes from AniList's official count (same approach as the
-  // detail page) — no extra fetch, renders as soon as the cached info lands.
+  // Episode strip: AniList's official count, capped at the latest AIRED
+  // episode for ongoing shows (nextAiringEpisode = next unaired ep). Without
+  // the cap, clicking a not-yet-aired episode sent providers hunting for
+  // something that doesn't exist — and some answered with a DIFFERENT
+  // anime's stream instead of a clean miss.
   const epTotal = info.data?.totalEpisodes;
+  const latestAired = info.data?.nextAiringEpisode
+    ? Math.min(info.data.nextAiringEpisode - 1, epTotal ?? Infinity)
+    : epTotal;
   const episodeList: number[] =
-    epTotal && epTotal > 0 && epTotal <= 500
-      ? Array.from({ length: epTotal }, (_, i) => i + 1)
+    latestAired && latestAired > 0 && latestAired <= 5000
+      ? Array.from({ length: latestAired }, (_, i) => i + 1)
       : [];
+  // Block pagination for long shows (One Piece…): 100 episodes per block,
+  // e.g. "1–100 · 101–200 · 201–300". Short shows render a single block
+  // and no selector.
+  const BLOCK = 100;
+  const blockCount = Math.max(1, Math.ceil(episodeList.length / BLOCK));
+  const [epBlock, setEpBlock] = useState(0);
+  // Keep the visible block in sync when the anime/episode changes (e.g.
+  // clicking Next on ep 100 must flip the strip to 101–200).
+  useEffect(() => {
+    setEpBlock(Math.min(Math.floor((epNum - 1) / BLOCK), blockCount - 1));
+  }, [id, epNum, blockCount]);
+  const blockEpisodes = episodeList.slice(epBlock * BLOCK, (epBlock + 1) * BLOCK);
   const [audio, setAudio] = useState<'sub' | 'dub'>('sub');
+  // Hard guard: never resolve streams for an episode that hasn't aired.
+  // Providers can't have it — some return a clean miss, others (Kuhi/Anivexa
+  // fallbacks) return a DIFFERENT anime's stream, which is far worse.
+  // NEVER resolve streams until the anime info has loaded. On first visit
+  // or F5 reload, info.data is null — firing the resolver then means
+  // isAdult is undefined (treated as false), so ALL providers race for
+  // H-animes and the wrong anime plays. The 10-minute stream cache then
+  // keeps that wrong result even after info arrives.
+  const infoLoaded = info.data != null;
+  const epAired =
+    info.data == null ||
+    info.data.nextAiringEpisode == null ||
+    epNum < info.data.nextAiringEpisode;
   const streams = useApi(
-    () => resolveStreams(id!, epNum, audio, info.data?.title),
-    [id, epNum, audio, info.data?.title],
+    () =>
+      infoLoaded && epAired
+        ? resolveStreams(id!, epNum, audio, info.data?.title, info.data?.isAdult)
+        : Promise.resolve({ streams: [], errors: [], unavailable: !infoLoaded ? undefined : true }),
+    [id, epNum, audio, info.data?.title, info.data?.isAdult, epAired, infoLoaded],
   );
 
   const allSources = streams.data?.streams ?? [];
@@ -133,7 +167,13 @@ export default function Watch() {
   }, [info.data?.title, epNum]);
 
   const totalEpisodes = info.data?.totalEpisodes;
-  const hasNext = totalEpisodes == null || epNum < totalEpisodes;
+  // "Next" only when the next episode has actually aired. For airing shows
+  // nextAiringEpisode is the first UNAIRED ep, so epNum+1 must be strictly
+  // below it; for finished/unknown shows fall back to the total count.
+  const hasNext =
+    info.data?.nextAiringEpisode != null
+      ? epNum + 1 < info.data.nextAiringEpisode
+      : totalEpisodes == null || epNum < totalEpisodes;
 
   const httpPlayer = activeSource && (
     <VideoPlayer
@@ -158,6 +198,7 @@ export default function Watch() {
     type: 'mp4',
     url: torrent.url,
     server: torrent.label,
+    audio,
   };
 
   const torrentPlayer = torrentSource && (
@@ -249,8 +290,12 @@ export default function Watch() {
         torrentPlayer
       ) : allSources.length === 0 ? null : (
         <ErrorState
-          title="No playable stream found"
-          message="Every source failed. Retry, or try the torrent fallback below."
+          title={streams.data?.unavailable ? 'Not available on any provider' : 'No playable stream found'}
+          message={
+            streams.data?.unavailable
+              ? 'No provider carries this anime (or this episode) right now. It may be too new, too niche, or licensed away. Try again later, or check the torrent fallback below.'
+              : 'Every source failed. Retry, or try the torrent fallback below.'
+          }
           details={streams.data?.errors}
           onRetry={() => {
             setFailedKeys(new Set());
@@ -261,17 +306,42 @@ export default function Watch() {
       )}
 
       {/* Episode strip — jump between episodes without going back to the
-          detail page. Independent of the info fetch, so it renders fast. */}
+          detail page. Only AIRED episodes are listed (see latestAired), and
+          long shows paginate in 100-episode blocks. */}
       {episodeList.length > 0 && (
         <section className="rounded-2xl bg-ink-900 p-4 ring-1 ring-white/5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-zinc-500">
-            Episodes
-            <span className="ml-2 rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
-              {episodeList.length}
-            </span>
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
+              Episodes
+              <span className="rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
+                {episodeList.length}
+              </span>
+            </h2>
+            {blockCount > 1 && (
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: blockCount }, (_, b) => {
+                  const start = b * BLOCK + 1;
+                  const end = Math.min((b + 1) * BLOCK, episodeList.length);
+                  const active = b === epBlock;
+                  return (
+                    <button
+                      key={b}
+                      onClick={() => setEpBlock(b)}
+                      className={`rounded-md px-2 py-1 text-xs ring-1 transition ${
+                        active
+                          ? 'bg-accent-600/20 font-semibold text-accent-300 ring-accent-500/50'
+                          : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
+                      }`}
+                    >
+                      {start}–{end}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="no-scrollbar flex flex-wrap gap-2">
-            {episodeList.map((num) => (
+            {blockEpisodes.map((num) => (
               <button
                 key={num}
                 onClick={() => navigate(`/watch/${id}/${num}`)}
@@ -285,6 +355,12 @@ export default function Watch() {
               </button>
             ))}
           </div>
+          {info.data?.nextAiringEpisode != null && info.data?.nextAiringAt != null && (
+            <p className="mt-3 text-xs text-zinc-600">
+              Episode {info.data.nextAiringEpisode} airs{' '}
+              {new Date(info.data.nextAiringAt * 1000).toLocaleString()}.
+            </p>
+          )}
         </section>
       )}
 

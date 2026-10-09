@@ -15,6 +15,7 @@ import senshiHandler               from "./providers/senshi.js";
 import kaaHandler                  from "./providers/kickassanime.js";
 import animedunyaHandler           from "./providers/animedunya.js";
 import animeonsenHandler           from "./providers/animeonsen.js";
+import hanimeHandler               from "./providers/hanime.js";
 import { getEpisodesResponse, getFilteredEpisodesResponse } from "./core/episode-cache.js";
 import { resolveProviders }         from "./core/episode-strategy.js";
 import { getAsync, setAsync, isFresh, mapTTL, WATCH_TTL, _CACHE_ENABLED } from "./core/smartcache.js";
@@ -277,6 +278,15 @@ export default {
       return cachedWatch(
         `watch:animeonsen:${id}:${audio}:${ep}`,
         () => animeonsenHandler.fetch(request)
+      );
+    }
+
+    m = path.match(/^\/watch\/hanime\/(\d+)\/(sub|dub)\/hanime-(\d+)\/?$/);
+    if (m) {
+      const [, id, audio, ep] = m;
+      return cachedWatch(
+        `watch:hanime:${id}:${audio}:${ep}`,
+        () => hanimeHandler.fetch(request)
       );
     }
 

@@ -5,6 +5,8 @@ import { anivexa } from './anivexa';
 import { anikage } from './anikage';
 import { oneanime } from './oneanime';
 import { probeAll } from './probe';
+import { verifyTitle } from './titleMatch';
+import { peekAnimeInfo } from './info';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
 
@@ -25,26 +27,28 @@ export interface ResolvedStreams {
    *  "No playable stream found" screen so failures are diagnosable instead
    *  of silent. Grows as slow providers fail in the background. */
   errors: string[];
+  /**
+   * True when every provider failed with a "confident miss" (title verifier
+   * rejected all candidates, or the provider's listing lacks the episode) —
+   * i.e. the anime is genuinely not available, as opposed to a network
+   * outage. The UI uses this to say "not available anywhere" instead of the
+   * scarier "everything is broken".
+   */
+  unavailable?: boolean;
 }
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Normalize a title for comparison: lowercase, alphanumerics only. */
-const normTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-
-/** First search result whose title actually matches the query.
- *  NEVER a blind first hit — a confident wrong anime (Lupin instead of the
- *  requested show) is worse than no stream at all. */
-function bestTitleMatch<T extends { title?: string }>(results: T[], query: string): T | undefined {
-  const q = normTitle(query);
-  if (!q) return undefined;
-  return (
-    results.find((r) => normTitle(r.title ?? '') === q) ??
-    results.find((r) => {
-      const t = normTitle(r.title ?? '');
-      return t.includes(q) || q.includes(t);
-    })
-  );
+/** Title-verification context for the current resolve: all AniList title
+ *  variants plus airing status, read from the ALREADY-FETCHED cached info —
+ *  zero extra requests, zero rate-limit exposure. */
+function titleContext(animeId: number | string, title: string | undefined) {
+  const info = peekAnimeInfo(String(animeId));
+  return {
+    main: title?.trim() || info?.title || String(animeId),
+    alt: info?.altTitles,
+    status: info?.status,
+  };
 }
 
 /** Order streams by the user's provider preference list (prefix match on
@@ -92,6 +96,7 @@ async function resolveStreamsInner(
   episode: number,
   audio: AudioType = 'sub',
   title?: string,
+  isAdult?: boolean,
 ): Promise<ResolvedStreams> {
   const titleQ = title?.trim() || String(animeId);
   const errors: string[] = [];
@@ -132,7 +137,34 @@ async function resolveStreamsInner(
     }
   };
 
+  // For adult titles, AniKage's exact AniList-ID match is the ONLY
+  // trustworthy source: search-based providers often don't index H content,
+  // and ID-based aggregators (Anivexa/Kuhi) have been observed returning
+  // wrong-anime streams for H IDs. AniKage maps by AniList ID directly, so
+  // an exact match there is definitive. We still race other providers as
+  // fallback, but AniKage gets a head start.
+  // isAdult comes from the caller (Watch page) — peekAnimeInfo returns
+  // undefined on F5 reload (empty cache), which would wrongly race all
+  // providers for H titles.
+  const adult = isAdult ?? peekAnimeInfo(String(animeId))?.isAdult === true;
+  console.log(`[streamResolver] animeId=${animeId} isAdult param=${isAdult} peek=${peekAnimeInfo(String(animeId))?.isAdult} adult=${adult} attempts=${adult ? 1 : 'all'}`);
+
   const attempts: Attempt[] = [
+    // Adult titles: ONLY the dedicated H provider via the anime-api sidecar.
+    // Generic providers don't index H content or return wrong streams, so
+    // they're excluded entirely for adult titles.
+    ...(adult
+      ? [{
+          tag: 'hanime',
+          name: 'Hanime',
+          run: async () => {
+            // The hanime provider lives in the anime-api sidecar. It
+            // slugifies AniList titles and probes hstream.moe + hanime.tv.
+            const r = await anivexa.watch('hanime', animeId, episode, 'sub');
+            return nonEmpty('Hanime', r);
+          },
+        }]
+      : [
     {
       tag: 'kuhi',
       name: 'Kuhi',
@@ -157,8 +189,25 @@ async function resolveStreamsInner(
       name: 'AniKage',
       run: async () => {
         const results = await anikage.search(titleQ);
-        const best = results.find((r) => r.anilistId === Number(animeId));
+        // AniKage may return anilistId as string OR number depending on the
+        // endpoint — coerce both sides before comparing (=== on mismatched
+        // types silently fails and the exact-ID match is discarded).
+        const wantId = Number(animeId);
+        const best = results.find((r) => Number(r.anilistId) === wantId);
         if (!best) throw new Error('AniKage: no exact AniList match');
+        // Airing guard: AniKage's search payload carries the episode count.
+        // For a RELEASING show a count below the requested episode means the
+        // slug is stale (pointing at a partial/older listing) — don't burn
+        // rate-limited server probes on it.
+        const info = peekAnimeInfo(String(animeId));
+        if (
+          info?.status === 'RELEASING' &&
+          typeof best.episodes === 'number' &&
+          best.episodes > 0 &&
+          best.episodes < episode
+        ) {
+          throw new Error('AniKage: listing lacks this episode');
+        }
         return nonEmpty('AniKage', await anikage.sources(best.slug, episode, audio));
       },
     },
@@ -168,9 +217,24 @@ async function resolveStreamsInner(
       run: async () => {
         if (!settings.enableConsumetFallback) throw new Error('Consumet: disabled in Settings');
         const results = await consumet.search(titleQ);
-        const best = bestTitleMatch(results, titleQ);
+        // Verify against ALL AniList title variants + airing guard: a partial
+        // sequel listing must never hijack the episode (see titleMatch.ts).
+        const ctx = titleContext(animeId, title);
+        const best = verifyTitle(
+          results.map((r) => ({ ...r, episodes: undefined })),
+          ctx.main,
+          ctx.alt,
+          { episode, status: ctx.status },
+        );
         if (!best) throw new Error('Consumet: no confident title match');
         const detail = await consumet.info(best.id);
+        // Airing guard on the episode list itself: for a RELEASING show the
+        // provider must actually carry the requested episode. A short list
+        // here means wrong season/partial index — refuse rather than play
+        // episode 1 of the wrong anime.
+        if (ctx.status === 'RELEASING' && detail.episodes.length < episode) {
+          throw new Error('Consumet: episode list too short for airing show');
+        }
         const ep =
           detail.episodes.find((e) => e.number === episode) ??
           detail.episodes[episode - 1];
@@ -194,8 +258,19 @@ async function resolveStreamsInner(
       name: 'animepahe',
       run: async () => {
         const results = await animepahe.search(titleQ);
-        const best = bestTitleMatch(results, titleQ);
+        const ctx = titleContext(animeId, title);
+        // animepahe reports episode counts in search results — feed them to
+        // the verifier so the airing guard can reject partial sequel listings.
+        const best = verifyTitle(results, ctx.main, ctx.alt, {
+          episode,
+          status: ctx.status,
+        });
         if (!best) throw new Error('animepahe: no confident title match');
+        // Airing guard: pahe's count is reliable; a short listing for a
+        // RELEASING show means we matched the wrong season.
+        if (ctx.status === 'RELEASING' && best.episodes > 0 && best.episodes < episode) {
+          throw new Error('animepahe: matched listing lacks this episode');
+        }
         const epSession = await animepahe.findEpisode(best.session, episode);
         if (!epSession) throw new Error('animepahe: episode not found');
         const streams = await animepahe.streams(epSession);
@@ -204,16 +279,25 @@ async function resolveStreamsInner(
         return nonEmpty('animepahe', { streams: filtered.length > 0 ? filtered : streams });
       },
     },
+      ]),
   ];
 
   // Run every attempt concurrently; each failure is recorded (live array,
   // visible even to callers who already received the result) and re-thrown.
-  const pending = attempts.map((a) =>
+  // "Confident miss" errors (verifier rejected the title, episode absent
+  // from the listing) mean the provider DOESN'T HAVE this anime — different
+  // from a network/500 failure. When every provider confidently misses, the
+  // anime is genuinely unavailable and the UI should say so plainly.
+  const MISS_RE = /no confident title match|episode not found|lacks this episode|too short for airing|title not found|no page found/i;
+  const missFlags: boolean[] = attempts.map(() => false);
+  const pending = attempts.map((a, i) =>
     a
       .run()
       .then((result): TaggedResult => ({ tag: a.tag, result }))
       .catch((e: unknown) => {
-        errors.push(errMsg(e));
+        const msg = errMsg(e);
+        errors.push(msg);
+        if (MISS_RE.test(msg)) missFlags[i] = true;
         throw e;
       }),
   );
@@ -221,10 +305,15 @@ async function resolveStreamsInner(
   const allSettled = Promise.allSettled(pending);
 
   let first: TaggedResult;
+  // For adult titles, only the hanime provider is in the race — await it
+  // directly. For regular anime, race all providers.
   try {
-    first = await Promise.any(pending);
+    first = adult ? await pending[0] : await Promise.any(pending);
   } catch (e) {
-    if (e instanceof AggregateError) return { streams: [], errors };
+    if (e instanceof AggregateError) {
+      const unavailable = missFlags.every(Boolean) && missFlags.length > 0;
+      return { streams: [], errors, unavailable };
+    }
     throw e;
   }
 
@@ -298,8 +387,11 @@ export async function resolveStreams(
   episode: number,
   audio: AudioType = 'sub',
   title?: string,
+  isAdult?: boolean,
 ): Promise<ResolvedStreams> {
-  const key = `${animeId}|${episode}|${audio}`;
+  // Include isAdult in the cache key — a cached "all providers" result must
+  // never be served for an H title (and vice versa).
+  const key = `${animeId}|${episode}|${audio}|${isAdult === true ? 'a' : 'n'}`;
   const hit = streamCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
     // Fresh wrapper so React sees new state on reload; the streams array may
@@ -307,7 +399,7 @@ export async function resolveStreams(
     const v = hit.value;
     return { streams: [...v.streams], subtitles: v.subtitles, errors: v.errors };
   }
-  const value = await resolveStreamsInner(animeId, episode, audio, title);
+  const value = await resolveStreamsInner(animeId, episode, audio, title, isAdult);
   streamCache.set(key, { at: Date.now(), value });
   return value;
 }

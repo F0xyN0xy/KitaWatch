@@ -54,6 +54,10 @@ export default function Settings() {
     setRememberFullscreen,
     discordRichPresence,
     setDiscordRichPresence,
+    showAdultContent,
+    setShowAdultContent,
+    updateAdultProgress,
+    setUpdateAdultProgress,
   } = useSettingsStore();
 
   const { accessToken, viewer, clear } = useAuthStore();
@@ -203,6 +207,28 @@ export default function Settings() {
             </div>
           </>
         )}
+      </Section>
+
+      <Section title="Adult Content">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Show adult content</p>
+            <p className="text-xs text-zinc-600">
+              Hentai appears in search and discovery. Direct links always work regardless.
+            </p>
+          </div>
+          <Toggle on={showAdultContent} onChange={setShowAdultContent} />
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Update AniList progress for adult titles</p>
+            <p className="text-xs text-zinc-600">
+              Off by default — with this off, watching H anime never writes to your AniList
+              list or public activity feed. Regular anime always update as usual.
+            </p>
+          </div>
+          <Toggle on={updateAdultProgress} onChange={setUpdateAdultProgress} />
+        </div>
       </Section>
 
       <Section title="Playback">

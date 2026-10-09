@@ -25,6 +25,12 @@ export interface AnimeSummary {
   year?: number;
   status?: string;
   isAdult?: boolean;
+  /** Next UNAIRED episode number (1-based) for currently-airing shows.
+   *  Episodes >= this haven't aired yet. Undefined for finished shows or
+   *  when AniList doesn't know the schedule. */
+  nextAiringEpisode?: number;
+  /** Unix seconds when the next episode airs. */
+  nextAiringAt?: number;
 }
 
 export interface SpotlightAnime extends AnimeSummary {
@@ -35,6 +41,10 @@ export interface AnimeInfo extends AnimeSummary {
   synopsis?: string;
   releaseDate?: string;
   studios?: string[];
+  /** Other title variants from AniList (romaji/english/native minus the
+   *  canonical one) — used by the stream resolver to verify provider hits
+   *  without extra network requests. */
+  altTitles?: string[];
 }
 
 export interface EpisodeSummary {

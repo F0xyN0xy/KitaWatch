@@ -73,8 +73,8 @@ export interface AnivexaResult {
 
 function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): AnivexaResult {
   const raw = (env.streams ?? env.sources ?? []).filter(
-    // embeds (FileMoon-style) and DASH (AnimeOnsen) can't play in our stack
-    (s) => s.type !== 'embed' && s.type !== 'dash',
+    // keep all stream types (embed/dash included for hanime/hstream)
+    () => true,
   );
   const envReferer = env.referer ?? env.headers?.Referer ?? env.headers?.referer;
 
@@ -153,5 +153,21 @@ export const anivexa = {
       if (subtitles.length === 0) subtitles.push(...r.value.subtitles);
     }
     return { streams, subtitles };
+  },
+
+  /** Query a single provider by name (e.g. 'hanime' for adult content). */
+  async watch(
+    provider: string,
+    anilistId: number | string,
+    episode: number,
+    audio: AudioType,
+  ): Promise<AnivexaResult> {
+    const env = await withTimeout(
+      get<WatchEnvelope>(
+        `/watch/${provider}/${anilistId}/${audio}/${provider}-${episode}`,
+      ),
+      15_000,
+    );
+    return mapResult(env, provider, audio);
   },
 };

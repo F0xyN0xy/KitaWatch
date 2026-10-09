@@ -22,13 +22,17 @@ const fetchInfo = fetchAnimeInfo;
 
 /** When every provider's episode list fails, fall back to AniList's episode
  *  count so playback can still be attempted by number (extract works by
- *  anilist ID + episode number alone). Thumbnails fall back to the cover. */
+ *  anilist ID + episode number alone). Thumbnails fall back to the cover.
+ *  Capped at the latest AIRED episode for ongoing shows (nextAiring = first
+ *  unaired ep) — same rule as the watch page's episode strip. */
 function fallbackEpisodes(
   total: number | undefined,
   cover: string | undefined,
+  nextAiring?: number,
 ): EpisodeSummary[] {
-  if (!total || total <= 0 || total > 500) return [];
-  return Array.from({ length: total }, (_, i) => ({
+  const latest = nextAiring ? Math.min(nextAiring - 1, total ?? Infinity) : total;
+  if (!latest || latest <= 0 || latest > 5000) return [];
+  return Array.from({ length: latest }, (_, i) => ({
     number: i + 1,
     thumbnail: cover,
   }));
@@ -157,7 +161,7 @@ export default function Detail() {
   // Episode grid comes from AniList's official count — always reliable.
   const shownEpisodes: EpisodeSummary[] = info.loading
     ? []
-    : fallbackEpisodes(a?.totalEpisodes, a?.cover);
+    : fallbackEpisodes(a?.totalEpisodes, a?.cover, a?.nextAiringEpisode);
 
   // AniList-direct recommendations (covers guaranteed); Kuhi as fallback
   const recommendations = useApi<AnimeSummary[]>(

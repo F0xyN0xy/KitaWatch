@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "img-src 'self' data: blob: https://*.anilist.co https://i.anilist.co https://s4.anilist.co https://serveproxy.com http://localhost:* http://127.0.0.1:*"
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.anilist.co https://i.anilist.co https://s4.anilist.co https://serveproxy.com http://localhost:* http://127.0.0.1:*; frame-src 'self' https://hanime.tv https://hstream.moe https://hentaiocean.com https://*.hentaiocean.com; connect-src 'self' https://*.anilist.co https://serveproxy.com http://localhost:*; script-src 'self' 'unsafe-inline';"
     }
   },
   "bundle": {
