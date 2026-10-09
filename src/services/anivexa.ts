@@ -71,22 +71,47 @@ export interface AnivexaResult {
   subtitles: SubtitleTrack[];
 }
 
+/**
+ * Infer only formats the in-app player can actually consume. A provider page
+ * returning HTTP 200 is not a video stream, so unknown URLs must not silently
+ * be mislabeled as MP4. Providers may explicitly mark a URL as an embed; the
+ * player must separately decide whether that embed is supported/allowed.
+ */
+function classifySource(s: RawSource): 'hls' | 'mp4' | 'embed' | null {
+  const declared = s.type?.trim().toLowerCase();
+  if (declared === 'embed') return 'embed';
+  if (declared === 'hls') return 'hls';
+  if (declared === 'mp4') return 'mp4';
+
+  if (!s.url) return null;
+  try {
+    const pathname = new URL(s.url).pathname.toLowerCase();
+    if (pathname.endsWith('.m3u8')) return 'hls';
+    if (pathname.endsWith('.mp4') || pathname.endsWith('.m4v')) return 'mp4';
+  } catch {
+    // Invalid or relative URLs are not safely classifiable here.
+  }
+  return null;
+}
+
 function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): AnivexaResult {
-  const raw = (env.streams ?? env.sources ?? []).filter(
-    // keep all stream types (embed/dash included for hanime/hstream)
-    () => true,
-  );
+  const raw = env.streams ?? env.sources ?? [];
   const envReferer = env.referer ?? env.headers?.Referer ?? env.headers?.referer;
 
   const streams: StreamSource[] = [];
   const subtitles: SubtitleTrack[] = [];
 
   for (const s of raw) {
-    const u = s.url;
+    const u = s.url?.trim();
     if (!u) continue;
+
+    const type = classifySource({ ...s, url: u });
+    // Don't tell ArtPlayer that an ordinary HTML page is an MP4 file.
+    if (!type) continue;
+
     const referer = s.referer ?? s.headers?.Referer ?? s.headers?.referer ?? envReferer;
     streams.push({
-      type: s.type === 'hls' || u.includes('.m3u8') ? 'hls' : 'mp4',
+      type,
       url: u,
       server: `anivexa:${s.server ?? provider}`,
       audio,
@@ -94,11 +119,19 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
       referer,
       viaProxy: !!referer,
     });
-    // first stream with usable (vtt/srt) subtitles wins — ASS can't render in-app
+
+    // First stream with usable (VTT/SRT) subtitles wins — ASS isn't rendered in-app.
     if (subtitles.length === 0) {
       for (const sub of s.subtitles ?? []) {
         if (!sub.url) continue;
-        const fmt = (sub.format ?? sub.url.split('.').pop() ?? '').toLowerCase();
+        let fmt = (sub.format ?? '').toLowerCase();
+        if (!fmt) {
+          try {
+            fmt = new URL(sub.url).pathname.split('.').pop()?.toLowerCase() ?? '';
+          } catch {
+            fmt = '';
+          }
+        }
         if (fmt !== 'vtt' && fmt !== 'srt') continue;
         subtitles.push({ url: sub.url, lang: sub.label ?? sub.srclang ?? 'sub' });
       }

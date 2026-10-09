@@ -89,7 +89,7 @@ async function query(base: string, id: number, episode: number): Promise<SkipTim
 
 async function fetchSkipTimes(anilistId: number, episode: number): Promise<SkipTimes | null> {
   const malId = await resolveMalId(anilistId);
-  const ids = [anilistId, malId].filter((x): x is number => x != null);
+  const ids = malId != null ? [malId] : [anilistId];
 
   // 1) Exact episode, every endpoint, every known ID type.
   for (const id of ids) {

@@ -310,8 +310,10 @@ async function resolveStreamsInner(
   try {
     first = adult ? await pending[0] : await Promise.any(pending);
   } catch (e) {
-    if (e instanceof AggregateError) {
-      const unavailable = missFlags.every(Boolean) && missFlags.length > 0;
+    if (adult || e instanceof AggregateError) {
+      const unavailable =
+        missFlags.length > 0 && missFlags.every(Boolean);
+
       return { streams: [], errors, unavailable };
     }
     throw e;
@@ -397,7 +399,12 @@ export async function resolveStreams(
     // Fresh wrapper so React sees new state on reload; the streams array may
     // have grown via a background merge since the last read.
     const v = hit.value;
-    return { streams: [...v.streams], subtitles: v.subtitles, errors: v.errors };
+    return {
+      streams: [...v.streams],
+      subtitles: v.subtitles,
+      errors: v.errors,
+      unavailable: v.unavailable,
+    };
   }
   const value = await resolveStreamsInner(animeId, episode, audio, title, isAdult);
   streamCache.set(key, { at: Date.now(), value });

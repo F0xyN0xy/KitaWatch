@@ -106,8 +106,25 @@ export default function VideoPlayer({
       callbacks.current.onFatal();
     };
 
+    // ArtPlayer can play direct media files, not arbitrary webpage URLs.
+    // An embed page is a separate website and may prohibit framing with CSP;
+    // do not mislabel it as MP4 or try to work around the provider's policy.
     const isEmbed = source.type === 'embed';
-    const isHls = source.type === 'hls' || source.url.includes('.m3u8');
+    const isHls = source.type === 'hls' || (() => {
+      try {
+        return new URL(source.url).pathname.toLowerCase().endsWith('.m3u8');
+      } catch {
+        return false;
+      }
+    })();
+    const isDirectMedia = isHls || source.type === 'mp4' || (() => {
+      try {
+        const path = new URL(source.url).pathname.toLowerCase();
+        return path.endsWith('.mp4') || path.endsWith('.m4v');
+      } catch {
+        return false;
+      }
+    })();
     const sub = subtitles?.[0];
     const subType = sub
       ? sub.url.includes('.ass')
@@ -116,6 +133,28 @@ export default function VideoPlayer({
           ? 'srt'
           : 'vtt'
       : null;
+
+    // A webpage URL is not a video stream. Providers that explicitly support
+    // embedding must supply a permitted embed URL; this player only handles
+    // direct HLS/MP4 media so CSP restrictions are not bypassed.
+    if (isEmbed) {
+      const iframe = document.createElement('iframe');
+
+      iframe.src = source.url;
+      iframe.title = 'Video player';
+      iframe.allow = 'fullscreen; picture-in-picture';
+
+      Object.assign(iframe.style, {
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        backgroundColor: '#000',
+      });
+
+      containerRef.current.replaceChildren(iframe);
+
+      return;
+    }
 
     const init = async () => {
       // Subtitles: remote subtitle hosts are usually CORS-locked, and a failed
@@ -141,23 +180,6 @@ export default function VideoPlayer({
       }
 
       if (!containerRef.current) return;
-
-      if (isEmbed) {
-        // Embed stream (hentai providers): load in an iframe instead of ArtPlayer
-        const iframe = document.createElement('iframe');
-        iframe.src = source.url;
-        iframe.allowFullscreen = true;
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.style.backgroundColor = '#000';
-        containerRef.current.innerHTML = '';
-        containerRef.current.appendChild(iframe);
-        // Minimal cleanup
-        return () => {
-          containerRef.current!.innerHTML = '';
-        };
-      }
 
       art = new Artplayer({
         container: containerRef.current,
