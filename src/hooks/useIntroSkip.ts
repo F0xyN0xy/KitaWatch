@@ -62,7 +62,9 @@ function parseTimes(data: unknown): SkipTimes | null {
     const hit = results.find((r) => types.includes(r.skipType ?? r.skip_type ?? ''));
     if (!hit?.interval) return null;
     const iv = hit.interval;
-    return { start: iv.startTime ?? iv.start_time ?? 0, end: iv.endTime ?? iv.end_time ?? 0 };
+    const start = iv.startTime ?? iv.start_time ?? 0;
+    const end = iv.endTime ?? iv.end_time ?? 0;
+    return end > start ? { start, end } : null; // ignore empty/inverted windows
   };
   const times: SkipTimes = {
     op: pick('op', 'mixed-op'),
@@ -71,31 +73,79 @@ function parseTimes(data: unknown): SkipTimes | null {
   return times.op || times.ed ? times : null;
 }
 
-async function query(base: string, id: number, episode: number): Promise<SkipTimes | null> {
+type QueryResult =
+  | { status: 'hit'; times: SkipTimes }
+  /** Endpoint answered: 404 / empty dataset. Normal for most episodes. */
+  | { status: 'miss' }
+  /** Timeout / DNS / CORS / 5xx — the endpoint itself is unhealthy. */
+  | { status: 'error' };
+
+/* Per-session memory so a missing episode costs one request per endpoint,
+ * not one per re-render, and a dead mirror isn't retried for every sibling
+ * episode. (The browser still prints its own "404" network line for the
+ * first request; that line can't be suppressed from JS and is harmless.) */
+const missCache = new Set<string>();
+const endpointDownUntil = new Map<string, number>();
+const ENDPOINT_COOLDOWN_MS = 5 * 60_000;
+
+async function query(
+  base: string,
+  id: number,
+  episode: number,
+  signal?: AbortSignal,
+): Promise<QueryResult> {
+  const missKey = `${base}|${id}|${episode}`;
+  if (missCache.has(missKey)) return { status: 'miss' };
+  if ((endpointDownUntil.get(base) ?? 0) > Date.now()) return { status: 'error' };
+
   const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
   const t = setTimeout(() => ctrl.abort(), 6_000);
   try {
     const res = await fetch(`${base}/skip-times/${id}/${episode}?types[]=op&types[]=ed`, {
       signal: ctrl.signal,
     });
-    if (!res.ok) return null;
-    return parseTimes(await res.json());
+    if (res.status === 404) {
+      // "No skip data for this episode" — an expected answer, not a failure.
+      missCache.add(missKey);
+      return { status: 'miss' };
+    }
+    if (!res.ok) {
+      endpointDownUntil.set(base, Date.now() + ENDPOINT_COOLDOWN_MS);
+      return { status: 'error' };
+    }
+    const times = parseTimes(await res.json());
+    if (!times) {
+      missCache.add(missKey);
+      return { status: 'miss' };
+    }
+    return { status: 'hit', times };
   } catch {
-    return null; // timeout / DNS / CORS — try the next endpoint
+    if (!signal?.aborted) endpointDownUntil.set(base, Date.now() + ENDPOINT_COOLDOWN_MS);
+    return { status: 'error' };
   } finally {
     clearTimeout(t);
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 
-async function fetchSkipTimes(anilistId: number, episode: number): Promise<SkipTimes | null> {
+export async function fetchSkipTimes(
+  anilistId: number,
+  episode: number,
+  signal?: AbortSignal,
+): Promise<SkipTimes | null> {
   const malId = await resolveMalId(anilistId);
   const ids = malId != null ? [malId] : [anilistId];
 
   // 1) Exact episode, every endpoint, every known ID type.
+  let answering: { base: string; id: number } | null = null; // first endpoint that said "no data"
   for (const id of ids) {
     for (const base of ENDPOINTS) {
-      const times = await query(base, id, episode);
-      if (times) return times;
+      if (signal?.aborted) return null;
+      const r = await query(base, id, episode, signal);
+      if (r.status === 'hit') return r.times;
+      if (r.status === 'miss' && !answering) answering = { base, id };
     }
   }
 
@@ -103,17 +153,17 @@ async function fetchSkipTimes(anilistId: number, episode: number): Promise<SkipT
   //    fixed timestamps. If this episode has no data, borrow the nearest
   //    sibling's windows (skipping ep < 1). Rarely wrong (recap/special
   //    episodes); still far better than never showing the button.
+  //    Only the endpoint that already answered is asked (3 mirrors x 4
+  //    siblings used to be 12 extra requests); if every mirror is down,
+  //    sibling lookups would just fail the same way, so none are made.
+  if (!answering) return null;
   for (const delta of [1, -1, 2, -2]) {
     const ep = episode + delta;
     if (ep < 1) continue;
-    for (const id of ids) {
-      for (const base of ENDPOINTS) {
-        const times = await query(base, id, ep);
-        if (times) return times;
-      }
-    }
+    if (signal?.aborted) return null;
+    const r = await query(answering.base, answering.id, ep, signal);
+    if (r.status === 'hit') return r.times;
   }
-
   return null;
 }
 
@@ -135,16 +185,20 @@ export function useIntroSkip(animeId: string, episode: number): SkipTimes | null
       setSkip(cache.get(key)!);
       return;
     }
-    let live = true;
-    fetchSkipTimes(Number(animeId), episode)
+    // Missing data is a normal outcome: resolve to null, never reject, and
+    // never touch playback. Aborting on unmount keeps stale lookups quiet.
+    const ctrl = new AbortController();
+    setSkip(null);
+    fetchSkipTimes(Number(animeId), episode, ctrl.signal)
       .then((s) => {
+        if (ctrl.signal.aborted) return;
         cache.set(key, s);
-        if (live) setSkip(s);
+        setSkip(s);
       })
-      .catch(() => cache.set(key, null));
-    return () => {
-      live = false;
-    };
+      .catch(() => {
+        if (!ctrl.signal.aborted) cache.set(key, null);
+      });
+    return () => ctrl.abort();
   }, [animeId, episode]);
 
   return skip;

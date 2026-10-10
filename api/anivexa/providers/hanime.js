@@ -2,6 +2,8 @@
 // Queries hentaiocean.com API (docs: /api?action=hentai&slug=) +
 // embed endpoint /embed/<slug> + hstream.moe + hanime.tv by title slug.
 
+import { absoluteHttpUrl, mediaKindFromUrl, frameEmbedPolicy } from "../core/source-type.js";
+
 const HENTAIOCEAN_API = "https://hentaiocean.com/api";
 const HENTAIOCEAN_EMBED = "https://hentaiocean.com/embed";
 
@@ -100,175 +102,172 @@ async function fetchJson(url) {
   }
 }
 
-async function fetchText(url) {
+const PAGE_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
+
+/** GET a page; keeps status + headers (needed to judge embeddability). */
+async function fetchPage(url) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
+    const res = await fetch(url, { headers: PAGE_HEADERS });
     console.log(`[hanime] ${res.status} ${url}`);
     if (!res.ok) return null;
-    return await res.text();
+    return { url, headers: res.headers, text: await res.text() };
   } catch (e) {
     console.log(`[hanime] fetch error ${url}: ${e.message}`);
     return null;
   }
 }
 
-async function tryHentaiOceanAPI(slug) {
+// HTTP 200 only proves a page exists. A candidate becomes playable ONLY if
+//  (a) it exposes a direct hls/mp4 URL, or
+//  (b) it is an embed endpoint whose own response headers allow framing.
+// Everything else is recorded in `report` and never returned as a stream.
+
+function pushStream(streams, seen, stream) {
+  if (seen.has(stream.url)) return;
+  seen.add(stream.url);
+  streams.push(stream);
+}
+
+/** Direct media URLs exposed by a page (typed from the URL path, never guessed). */
+function extractMediaStreams(html, base) {
+  const streams = [];
+  const seen = new Set();
+  const add = (raw) => {
+    const url = absoluteHttpUrl(raw, base);
+    const type = url && mediaKindFromUrl(url);
+    if (!type) return;
+    pushStream(streams, seen, { url, type, quality: "auto", audio: "sub", server: "hanime", referer: base });
+  };
+
+  let m;
+  const srcRegex = /<(?:source|video)[^>]+src=["']([^"']+)["']/gi;
+  while ((m = srcRegex.exec(html)) !== null) add(m[1]);
+
+  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  while ((m = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(m[1]);
+      for (const v of Array.isArray(data) ? data : [data]) add(v?.contentUrl);
+    } catch { /* malformed JSON-LD */ }
+  }
+
+  // Quoted absolute URLs inside inline scripts / JSON blobs.
+  const quoted = /["'](https?:\/\/[^"'\s]+?\.(?:m3u8|mp4)(?:\?[^"'\s]*)?)["']/gi;
+  while ((m = quoted.exec(html)) !== null) add(m[1]);
+  return streams;
+}
+
+/** Iframe / JSON-LD embedUrl candidates a page itself declares. */
+function extractEmbedCandidates(html, base) {
+  const out = new Set();
+  let m;
+  const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
+  while ((m = iframeRegex.exec(html)) !== null) {
+    const u = absoluteHttpUrl(m[1], base);
+    if (u) out.add(u);
+  }
+  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  while ((m = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(m[1]);
+      for (const v of Array.isArray(data) ? data : [data]) {
+        const u = absoluteHttpUrl(v?.embedUrl, base);
+        if (u) out.add(u);
+      }
+    } catch { /* malformed JSON-LD */ }
+  }
+  return [...out];
+}
+
+/** Embed stream for `url` if the provider's headers permit framing; else null (+report). */
+async function embedStreamIfAllowed(url, base, report, page) {
+  const res = page ?? (await fetchPage(url));
+  if (!res) return null;
+  const policy = frameEmbedPolicy(res.headers);
+  if (!policy.embeddable) {
+    console.log(`[hanime] not embeddable (${policy.reason}): ${url}`);
+    report.blocked.push({ url, reason: policy.reason });
+    return null;
+  }
+  return { url, type: "embed", quality: "auto", audio: "sub", server: "hanime-embed", referer: base };
+}
+
+async function tryHentaiOceanAPI(slug, report) {
   const url = `${HENTAIOCEAN_API}?action=hentai&slug=${encodeURIComponent(slug)}`;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res.ok) return null;
     const json = await res.json();
     const info = json?.info?.[0];
-    if (!info) return null;
-    // Use embed endpoint for stream (docs show /embed/<slug>)
+    if (!info?.urlname) return null;
+    // /embed/<urlname> is hentaiocean's documented iframe player endpoint.
     const embedUrl = `${HENTAIOCEAN_EMBED}/${info.urlname}`;
-    const embedHtml = await fetchText(embedUrl);
-    if (embedHtml) {
-      const streams = extractStreams(embedHtml, HENTAIOCEAN_EMBED);
-      if (streams.length > 0) return streams;
-    }
-    return null;
+    const page = await fetchPage(embedUrl);
+    if (!page) return null;
+    const media = extractMediaStreams(page.text, HENTAIOCEAN_BASE);
+    if (media.length > 0) return media;
+    const embed = await embedStreamIfAllowed(embedUrl, HENTAIOCEAN_BASE, report, page);
+    return embed ? [embed] : null;
   } catch (e) {
     console.log(`[hanime] hentaiocean api error: ${e.message}`);
     return null;
   }
 }
 
-async function tryHentaiOcean(slugs) {
-  // hentaiocean offers iframe embed player (/embed/{slug}) with direct streams
+async function tryHentaiOcean(slugs, report) {
   for (const slug of slugs) {
-    const streams = await tryHentaiOceanAPI(slug);
+    const streams = await tryHentaiOceanAPI(slug, report);
     if (streams) return streams;
   }
   return null;
 }
 
-function extractStreams(html, base) {
-  const streams = [];
-  const seen = new Set();
-
-  // <source> or <video src>
-  const srcRegex = /<(?:source|video)[^>]+src=["']([^"']+)["']/gi;
-  let m;
-  while ((m = srcRegex.exec(html)) !== null) {
-    let url = m[1];
-    if (url.startsWith("/")) url = `${base}${url}`;
-    if (seen.has(url)) continue;
-    if (url.includes(".m3u8")) {
-      seen.add(url);
-      streams.push({ url, type: "hls", quality: "auto", audio: "sub", server: "hanime", referer: base });
-    } else if (/\.(mp4|webm|mkv)/i.test(url)) {
-      seen.add(url);
-      streams.push({ url, type: "mp4", quality: "auto", audio: "sub", server: "hanime", referer: base });
-    }
-  }
-
-  // JSON-LD
-  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  while ((m = jsonLdRegex.exec(html)) !== null) {
-    try {
-      const data = JSON.parse(m[1]);
-      const videos = Array.isArray(data) ? data : [data];
-      for (const v of videos) {
-        const url = v?.contentUrl || v?.embedUrl || v?.url;
-        if (typeof url === "string") {
-          let full = url.startsWith("/") ? `${base}${url}` : url;
-          if (seen.has(full)) continue;
-          if (full.includes(".m3u8")) {
-            seen.add(full);
-            streams.push({ url: full, type: "hls", quality: "auto", audio: "sub", server: "hanime", referer: base });
-          } else if (/\.(mp4|webm)/i.test(full) || full.includes("embed")) {
-            seen.add(full);
-            streams.push({ url: full, type: "mp4", quality: "auto", audio: "sub", server: "hanime", referer: base });
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // iframe embeds
-  const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
-  while ((m = iframeRegex.exec(html)) !== null) {
-    let url = m[1];
-    if (url.startsWith("/")) url = `${base}${url}`;
-    if (seen.has(url)) continue;
-    if (url.includes("player") || url.includes("embed") || url.includes("stream")) {
-      seen.add(url);
-      streams.push({ url, type: "embed", quality: "auto", audio: "sub", server: "hanime-embed", referer: base });
-    }
-  }
-
-  // Aggressive stream extraction: scripts, inline URLs, JSON
-  const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
-  let m2;
-  while ((m2 = scriptRegex.exec(html)) !== null) {
-    const s = m2[1];
-    const urlMatch = s.match(/(?:https?:\/\/[^"'\s]+\.(?:m3u8|mp4)(?:[^"'\s]*))/g);
-    if (urlMatch) {
-      for (const raw of urlMatch) {
-        const url = raw.replace(/["'`]/g, '').trim();
-        if (url && url.includes('http') && !seen.has(url)) {
-          seen.add(url);
-          streams.push({ url, type: url.includes('.m3u8') ? 'hls' : 'mp4', quality: 'auto', audio: 'sub', server: 'hanime', referer: base });
-        }
-      }
-    }
-  }
-
-  // m3u8/mp4 in scripts (quoted strings)
-  const m3u8Regex = /["'](https?:\/\/[^"']*?\.m3u8[^"']*)["']/g;
-  while ((m = m3u8Regex.exec(html)) !== null) {
-    if (!seen.has(m[1])) {
-      seen.add(m[1]);
-      streams.push({ url: m[1], type: "hls", quality: "auto", audio: "sub", server: "hanime", referer: base });
-    }
-  }
-  const mp4Regex = /["'](https?:\/\/[^"']*?\.mp4[^"']*)["']/g;
-  while ((m = mp4Regex.exec(html)) !== null) {
-    if (!seen.has(m[1])) {
-      seen.add(m[1]);
-      streams.push({ url: m[1], type: "mp4", quality: "auto", audio: "sub", server: "hanime", referer: base });
-    }
-  }
-
-  return streams;
-}
-
-async function tryHtmlSites(slugs, episode) {
-  // Confirmed working patterns from user docs/logs
-  const targets = [
-    // hanime.tv: slug without "-the-animation" + episode number
-    { base: HANIME_BASE, url: `${HANIME_BASE}/videos/hentai/${slugs[0].replace(/-the-animation$/, '')}-${episode}` },
-    // hstream.moe: slug with suffix kept + episode number
-    { base: HSTREAM_BASE, url: `${HSTREAM_BASE}/hentai/${slugs[0]}-${episode}` },
-  ];
-  // Also try base variants from slugs array
+async function tryHtmlSites(slugs, episode, report) {
+  const targets = [];
+  const seenTargets = new Set();
+  const addTarget = (base, url) => {
+    if (seenTargets.has(url)) return;
+    seenTargets.add(url);
+    targets.push({ base, url });
+  };
+  // hanime.tv: slug without "-the-animation" + episode number
+  addTarget(HANIME_BASE, `${HANIME_BASE}/videos/hentai/${slugs[0].replace(/-the-animation$/, "")}-${episode}`);
+  // hstream.moe: slug with suffix kept + episode number
+  addTarget(HSTREAM_BASE, `${HSTREAM_BASE}/hentai/${slugs[0]}-${episode}`);
   for (const s of slugs.slice(0, 6)) {
-    targets.push({ base: HSTREAM_BASE, url: `${HSTREAM_BASE}/hentai/${s}-${episode}` });
-    targets.push({ base: HANIME_BASE, url: `${HANIME_BASE}/videos/hentai/${s}-${episode}` });
+    addTarget(HSTREAM_BASE, `${HSTREAM_BASE}/hentai/${s}-${episode}`);
+    addTarget(HANIME_BASE, `${HANIME_BASE}/videos/hentai/${s}-${episode}`);
   }
-    for (const { base, url } of targets) {
-      console.log(`[hanime] probing: ${url}`);
-      const html = await fetchText(url);
-      if (!html) continue;
-      if (!html.includes("<video") && !html.includes("player") && !html.includes("embed") && !html.includes(".m3u8") && !html.includes(".mp4")) {
-        console.log(`[hanime] page exists but no video markers: ${url}`);
-        continue;
-      }
-      const streams = extractStreams(html, base);
-      if (streams.length > 0) {
-        console.log(`[hanime] found ${streams.length} streams from ${url}`);
-        return streams;
-      }
-      // Page loads but no raw .m3u8/.mp4 in HTML — return page as embed/player
-      console.log(`[hanime] page valid, returning embed url: ${url}`);
-      return [{ url, type: 'embed', quality: 'auto', audio: 'sub', server: 'hanime', referer: base }];
+
+  for (const { base, url } of targets) {
+    console.log(`[hanime] probing: ${url}`);
+    const page = await fetchPage(url);
+    if (!page) continue; // 404 / network error: candidate doesn't exist
+
+    const media = extractMediaStreams(page.text, base);
+    if (media.length > 0) {
+      console.log(`[hanime] found ${media.length} direct streams from ${url}`);
+      return media;
     }
+
+    // The watch page itself is NOT an embed. Only a frame the page declares,
+    // and only if that frame's own headers allow it.
+    const embeds = [];
+    for (const candidate of extractEmbedCandidates(page.text, base)) {
+      const e = await embedStreamIfAllowed(candidate, base, report);
+      if (e) embeds.push(e);
+    }
+    if (embeds.length > 0) return embeds;
+
+    // Page exists but gives us nothing playable. If it also forbids framing,
+    // say so explicitly (this is the hstream.moe case).
+    const policy = frameEmbedPolicy(page.headers);
+    report.pages.push({ url, reason: policy.embeddable ? "no direct media or embed found" : policy.reason });
+    if (!policy.embeddable) report.blocked.push({ url, reason: policy.reason });
+  }
   return null;
 }
 
@@ -292,6 +291,8 @@ async function getMedia(anilistId) {
   return json?.data?.Media;
 }
 
+export { extractMediaStreams, extractEmbedCandidates, buildSlugs, slugify };
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -313,15 +314,29 @@ export default {
       const slugs = buildSlugs(media, Number(ep));
       console.log(`[hanime] ${slugs.length} slug candidates`);
 
+      const report = { blocked: [], pages: [] };
+
       // Try hentaiocean first (proper API)
-      let streams = await tryHentaiOcean(slugs);
+      let streams = await tryHentaiOcean(slugs, report);
       if (!streams) {
-        console.log(`[hanime] hentaiocean failed, trying hstream/hanime...`);
-        streams = await tryHtmlSites(slugs, Number(ep));
+        console.log(`[hanime] hentaiocean had nothing playable, trying hstream/hanime...`);
+        streams = await tryHtmlSites(slugs, Number(ep), report);
       }
 
       if (!streams || streams.length === 0) {
-        throw new Error(`No streams found for ${title} ep=${ep}`);
+        // Pages that exist but aren't playable (deduped by URL).
+        const unplayable = [...report.pages, ...report.blocked].filter(
+          (p, i, all) => all.findIndex((q) => q.url === p.url) === i,
+        );
+        if (unplayable.length > 0) {
+          // Say why instead of faking a stream.
+          const why = unplayable.map((p) => `${new URL(p.url).host}: ${p.reason}`).join("; ");
+          return new Response(
+            JSON.stringify({ error: `Hanime: found ${title} ep=${ep} but it cannot be played in-app (${why}). No provider-supported embed or direct media available.`, unsupported: unplayable }),
+            { status: 422, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+          );
+        }
+        throw new Error(`No page found for ${title} ep=${ep}`);
       }
 
       console.log(`[hanime] returning ${streams.length} streams`);

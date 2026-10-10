@@ -10,10 +10,12 @@
     "tauri": "tauri",
     "setup:api": "node scripts/setup-api.mjs",
     "api": "node scripts/run-api.mjs",
+    "sidecar:preview": "npm run build:sidecars && tauri dev",
     "setup:anivexa": "node scripts/setup-anivexa.mjs",
     "build:sidecars": "node scripts/build-sidecars.mjs",
     "release:tag": "node scripts/tag-release.mjs",
-    "release": "npm run build:sidecars && tauri build"
+    "release": "npm run build:sidecars && tauri build",
+    "test": "node --test \"tests/**/*.test.*\""
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.0",

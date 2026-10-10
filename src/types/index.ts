@@ -56,7 +56,14 @@ export interface EpisodeSummary {
 }
 
 export interface StreamSource {
-  type: 'hls' | 'mp4' | 'dash' | 'embed';
+  /**
+   * - embed:   provider-approved page meant to be framed (iframe)
+   * - hls/mp4: direct media, played by ArtPlayer
+   * - unknown: a URL whose media type could not be established; never played
+   *            (see services/sourceType.ts)
+   * - dash:    reserved, no player support yet — treated like 'unknown'
+   */
+  type: 'hls' | 'mp4' | 'dash' | 'embed' | 'unknown';
   url: string;
   referer?: string;
   server?: string;
@@ -67,6 +74,8 @@ export interface StreamSource {
   /** Pre-play probe result (see services/probe.ts): true = playable,
    *  false = dead, undefined = not probed / inconclusive. */
   verified?: boolean;
+  /** Why this source cannot be played in-app (e.g. provider forbids framing). */
+  unsupportedReason?: string;
 }
 
 export interface SubtitleTrack {

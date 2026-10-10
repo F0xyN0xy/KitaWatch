@@ -1,5 +1,6 @@
 import { proxy } from './api';
 import type { StreamSource } from '@/types';
+import { classifySourceKind, mediaResponseVerdict } from './sourceType';
 
 /** Pre-play stream validation.
  *
@@ -36,22 +37,25 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
 }
 
 async function probeOne(s: StreamSource): Promise<boolean | undefined> {
-  const isHls = s.type === 'hls' || s.url.includes('.m3u8');
+  const kind = classifySourceKind(s.type, s.url);
+  // An embed's HTTP status says nothing about playback (a 200 page may still
+  // forbid framing), and an unknown URL is not media: neither gets a
+  // "playable" verdict from a status code.
+  if (kind === 'embed') return undefined;
+  if (kind === 'unknown') return false;
   try {
-    if (isHls) {
+    if (kind === 'hls') {
       // Same pipeline the player uses; response is the (rewritten) manifest.
       const res = await fetchWithTimeout(proxy.m3u8(s.url, s.referer ?? ''));
-      if (!res.ok) return false;
-      const text = await res.text();
-      return text.includes('#EXTM3U');
+      return mediaResponseVerdict('hls', res.status, res.headers.get('content-type'), await res.text());
     }
     // MP4: HEAD keeps it cheap (no body). 405/501 = "unknown", not dead —
     // the direct <video> path may still work even if the proxy can't tell.
+    // A 200 with an HTML/JSON content type is a webpage, not a video.
     const res = await fetchWithTimeout(proxy.cors(s.url), { method: 'HEAD' });
-    if (res.ok) return true;
-    return res.status === 405 || res.status === 501 ? undefined : false;
+    return mediaResponseVerdict('mp4', res.status, res.headers.get('content-type'));
   } catch {
-    return isHls ? false : undefined;
+    return kind === 'hls' ? false : undefined;
   }
 }
 

@@ -1,5 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
+import { classifySourceKind } from './sourceType';
 
 /** All 15 providers in Anivexa-API v2.2 (docs at GET /). */
 export const ANIVEXA_PROVIDERS = [
@@ -38,7 +39,17 @@ async function get<T>(path: string): Promise<T> {
     // fall through to proxied attempt
   }
   const res = await fetch(`${proxyBase()}/cors?u=${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`Anivexa responded ${res.status} for ${path}`);
+  if (!res.ok) {
+    // The sidecar explains *why* in { error } (e.g. "provider forbids
+    // embedding") — keep that text so it reaches the resolver's error list.
+    let detail = '';
+    try {
+      detail = ((await res.json()) as { error?: string })?.error ?? '';
+    } catch {
+      /* body wasn't JSON */
+    }
+    throw new Error(detail || `Anivexa responded ${res.status} for ${path}`);
+  }
   return (await res.json()) as T;
 }
 
@@ -71,29 +82,6 @@ export interface AnivexaResult {
   subtitles: SubtitleTrack[];
 }
 
-/**
- * Infer only formats the in-app player can actually consume. A provider page
- * returning HTTP 200 is not a video stream, so unknown URLs must not silently
- * be mislabeled as MP4. Providers may explicitly mark a URL as an embed; the
- * player must separately decide whether that embed is supported/allowed.
- */
-function classifySource(s: RawSource): 'hls' | 'mp4' | 'embed' | null {
-  const declared = s.type?.trim().toLowerCase();
-  if (declared === 'embed') return 'embed';
-  if (declared === 'hls') return 'hls';
-  if (declared === 'mp4') return 'mp4';
-
-  if (!s.url) return null;
-  try {
-    const pathname = new URL(s.url).pathname.toLowerCase();
-    if (pathname.endsWith('.m3u8')) return 'hls';
-    if (pathname.endsWith('.mp4') || pathname.endsWith('.m4v')) return 'mp4';
-  } catch {
-    // Invalid or relative URLs are not safely classifiable here.
-  }
-  return null;
-}
-
 function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): AnivexaResult {
   const raw = env.streams ?? env.sources ?? [];
   const envReferer = env.referer ?? env.headers?.Referer ?? env.headers?.referer;
@@ -105,9 +93,11 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
     const u = s.url?.trim();
     if (!u) continue;
 
-    const type = classifySource({ ...s, url: u });
-    // Don't tell ArtPlayer that an ordinary HTML page is an MP4 file.
-    if (!type) continue;
+    // Embed only when the provider declares it; hls/mp4 from the URL path.
+    // An undeclared webpage is 'unknown' and is dropped here — it must never
+    // be passed to ArtPlayer as if it were an MP4 file.
+    const type = classifySourceKind(s.type, u);
+    if (type === 'unknown') continue;
 
     const referer = s.referer ?? s.headers?.Referer ?? s.headers?.referer ?? envReferer;
     streams.push({

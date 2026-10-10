@@ -7,6 +7,7 @@ import { oneanime } from './oneanime';
 import { probeAll } from './probe';
 import { verifyTitle } from './titleMatch';
 import { peekAnimeInfo } from './info';
+import { classifySourceKind } from './sourceType';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
 
@@ -240,16 +241,21 @@ async function resolveStreamsInner(
           detail.episodes[episode - 1];
         if (!ep) throw new Error('Consumet: episode not found');
         const watch = await consumet.watch(ep.id);
-        const streams: StreamSource[] = (watch.sources ?? [])
-          .filter((s) => s?.url)
-          .map((s) => ({
-            type: s.isM3U8 || s.url.includes('.m3u8') ? 'hls' : 'mp4',
+        // Never default an unrecognised URL to mp4 — drop what can't be typed.
+        const streams: StreamSource[] = [];
+        for (const s of watch.sources ?? []) {
+          if (!s?.url) continue;
+          const type = classifySourceKind(s.isM3U8 ? 'hls' : undefined, s.url);
+          if (type === 'unknown' || type === 'embed') continue;
+          streams.push({
+            type,
             url: s.url,
             server: 'consumet:gogoanime',
             audio,
             quality: s.quality,
             referer: watch.headers?.Referer,
-          }));
+          });
+        }
         return nonEmpty('Consumet', { streams });
       },
     },
