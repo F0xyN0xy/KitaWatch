@@ -183,7 +183,7 @@ function extractEmbedCandidates(html, base) {
 }
 
 /** Embed stream for `url` if the provider's headers permit framing; else null (+report). */
-async function embedStreamIfAllowed(url, base, report, page) {
+async function embedStreamIfAllowed(url, base, report, page, server = "hanime-embed") {
   const res = page ?? (await fetchPage(url));
   if (!res) return null;
   const policy = frameEmbedPolicy(res.headers);
@@ -192,7 +192,7 @@ async function embedStreamIfAllowed(url, base, report, page) {
     report.blocked.push({ url, reason: policy.reason });
     return null;
   }
-  return { url, type: "embed", quality: "auto", audio: "sub", server: "hanime-embed", referer: base };
+  return { url, type: "embed", quality: "auto", audio: "sub", server, referer: base };
 }
 
 async function tryHentaiOceanAPI(slug, report) {
@@ -209,7 +209,7 @@ async function tryHentaiOceanAPI(slug, report) {
     if (!page) return null;
     const media = extractMediaStreams(page.text, HENTAIOCEAN_BASE);
     if (media.length > 0) return media;
-    const embed = await embedStreamIfAllowed(embedUrl, HENTAIOCEAN_BASE, report, page);
+    const embed = await embedStreamIfAllowed(embedUrl, HENTAIOCEAN_BASE, report, page, "hentaiocean-embed");
     return embed ? [embed] : null;
   } catch (e) {
     console.log(`[hanime] hentaiocean api error: ${e.message}`);
@@ -271,6 +271,19 @@ async function tryHtmlSites(slugs, episode, report) {
   return null;
 }
 
+
+// Playback preference, best first. Direct hls/mp4 plays in ArtPlayer with no
+// third-party ad stack; a provider embed runs the site's whole player (and its
+// ads). hentaiocean's embed is the ad-heavy one, so it is the last resort.
+function streamRank(s) {
+  if (s.type !== "embed") return 0;                    // direct media, any provider
+  if (s.server === "hentaiocean-embed") return 2;      // ad-heavy embed: last
+  return 1;                                            // other providers' embeds
+}
+function orderStreams(streams) {
+  return [...streams].sort((a, b) => streamRank(a) - streamRank(b)); // stable
+}
+
 async function getMedia(anilistId) {
   const query = `
     query ($id: Int) {
@@ -316,12 +329,16 @@ export default {
 
       const report = { blocked: [], pages: [] };
 
-      // Try hentaiocean first (proper API)
-      let streams = await tryHentaiOcean(slugs, report);
-      if (!streams) {
-        console.log(`[hanime] hentaiocean had nothing playable, trying hstream/hanime...`);
-        streams = await tryHtmlSites(slugs, Number(ep), report);
-      }
+      // Query hstream/hanime.tv and hentaiocean concurrently (no extra latency),
+      // then order: direct media -> other embeds -> hentaiocean embed LAST.
+      const [others, ocean] = await Promise.all([
+        tryHtmlSites(slugs, Number(ep), report),
+        tryHentaiOcean(slugs, report),
+      ]);
+      const seenUrls = new Set();
+      const streams = orderStreams([...(others ?? []), ...(ocean ?? [])]).filter(
+        (s) => (seenUrls.has(s.url) ? false : (seenUrls.add(s.url), true)),
+      );
 
       if (!streams || streams.length === 0) {
         // Pages that exist but aren't playable (deduped by URL).
