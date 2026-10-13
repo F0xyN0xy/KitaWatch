@@ -57,14 +57,14 @@ async function get<T>(path: string): Promise<T> {
   try {
     direct = await fetch(url);
   } catch (e) {
-    console.warn(`[Anivexa] direct request failed for ${path}:`, e);
+    console.warn('[Anivexa] direct request failed for %s', path, e);
   }
 
   if (direct?.ok) {
     try {
       return (await direct.json()) as T;
     } catch (e) {
-      console.warn(`[Anivexa] invalid JSON from ${path}:`, e);
+      console.warn('[Anivexa] invalid JSON from %s', path, e);
     }
   }
 
