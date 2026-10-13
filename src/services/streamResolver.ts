@@ -398,6 +398,7 @@ async function resolveStreamsInner(
   // Probe existing streams without delaying the live provider merge.
   void verify(liveValue);
 
+  if (!liveValue) throw new Error('Stream resolver completed without a result');
   return liveValue;
 }
 
