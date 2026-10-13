@@ -398,7 +398,7 @@ async function resolveStreamsInner(
   // Probe existing streams without delaying the live provider merge.
   void verify(liveValue);
 
-  return value;
+  return liveValue;
 }
 
 export async function resolveStreams(
