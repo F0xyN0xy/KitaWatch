@@ -29,28 +29,68 @@ function proxyBase(): string {
   return useSettingsStore.getState().proxyBaseUrl.replace(/\/$/, '');
 }
 
-/** Fetch with a CORS-proxy fallback (self-hosted instances vary on headers). */
+function localSidecarUrl(url: string): boolean {
+  try {
+    return ['localhost', '127.0.0.1', '::1'].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function responseError(res: Response): Promise<string> {
+  const body = await res.text().catch(() => '');
+  if (!body) return '';
+  try {
+    const parsed = JSON.parse(body) as { error?: string; message?: string };
+    return parsed.error ?? parsed.message ?? body.slice(0, 240);
+  } catch {
+    return body.slice(0, 240);
+  }
+}
+
+/** Fetch the local Anivexa sidecar directly; use the proxy only as a fallback
+ * for non-local configured endpoints or when the direct request itself fails. */
 async function get<T>(path: string): Promise<T> {
   const url = `${base()}${path}`;
+  let direct: Response | undefined;
+
   try {
-    const res = await fetch(url);
-    if (res.ok) return (await res.json()) as T;
-  } catch {
-    // fall through to proxied attempt
+    direct = await fetch(url);
+  } catch (e) {
+    console.warn(`[Anivexa] direct request failed for ${path}:`, e);
   }
-  const res = await fetch(`${proxyBase()}/cors?u=${encodeURIComponent(url)}`);
-  if (!res.ok) {
-    // The sidecar explains *why* in { error } (e.g. "provider forbids
-    // embedding") — keep that text so it reaches the resolver's error list.
-    let detail = '';
+
+  if (direct?.ok) {
     try {
-      detail = ((await res.json()) as { error?: string })?.error ?? '';
-    } catch {
-      /* body wasn't JSON */
+      return (await direct.json()) as T;
+    } catch (e) {
+      console.warn(`[Anivexa] invalid JSON from ${path}:`, e);
     }
-    throw new Error(detail || `Anivexa responded ${res.status} for ${path}`);
   }
-  return (await res.json()) as T;
+
+  // A 4xx/5xx from the local sidecar is the actual provider error. Proxying
+  // localhost:4000 through localhost:8001 only repeats the same failure and
+  // hides the useful response body, so preserve it for the resolver/UI.
+  if (direct && !direct.ok && localSidecarUrl(url)) {
+    const detail = await responseError(direct);
+    throw new Error(
+      `Anivexa HTTP ${direct.status} for ${path}${detail ? `: ${detail}` : ''}`,
+    );
+  }
+
+  const proxiedUrl = `${proxyBase()}/cors?u=${encodeURIComponent(url)}`;
+  const res = await fetch(proxiedUrl);
+  if (!res.ok) {
+    const detail = await responseError(res);
+    throw new Error(
+      `Anivexa proxy HTTP ${res.status} for ${path}${detail ? `: ${detail}` : ''}`,
+    );
+  }
+  try {
+    return (await res.json()) as T;
+  } catch (e) {
+    throw new Error(`Anivexa returned invalid JSON for ${path}: ${String(e)}`);
+  }
 }
 
 interface RawSubtitle {
@@ -88,6 +128,7 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
 
   const streams: StreamSource[] = [];
   const subtitles: SubtitleTrack[] = [];
+  let droppedUnknown = 0;
 
   for (const s of raw) {
     const u = s.url?.trim();
@@ -97,7 +138,10 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
     // An undeclared webpage is 'unknown' and is dropped here — it must never
     // be passed to ArtPlayer as if it were an MP4 file.
     const type = classifySourceKind(s.type, u);
-    if (type === 'unknown') continue;
+    if (type === 'unknown') {
+      droppedUnknown++;
+      continue;
+    }
 
     const referer = s.referer ?? s.headers?.Referer ?? s.headers?.referer ?? envReferer;
     streams.push({
@@ -126,6 +170,15 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
         subtitles.push({ url: sub.url, lang: sub.label ?? sub.srclang ?? 'sub' });
       }
     }
+  }
+
+  if (raw.length > 0 && streams.length === 0) {
+    console.warn(
+      `[Anivexa] ${provider}: received ${raw.length} source(s), but all were rejected as unsupported`,
+      { declaredTypes: raw.map((s) => s.type ?? '(missing)').slice(0, 10), droppedUnknown },
+    );
+  } else if (droppedUnknown > 0) {
+    console.warn(`[Anivexa] ${provider}: dropped ${droppedUnknown} unsupported source(s)`);
   }
 
   return { streams, subtitles };
@@ -158,23 +211,57 @@ export const anivexa = {
   ): Promise<AnivexaResult> {
     const results = await Promise.allSettled(
       ANIVEXA_PROVIDERS.map(async (provider) => {
-        const env = await withTimeout(
-          get<WatchEnvelope>(
-            `/watch/${provider}/${anilistId}/${audio}/${provider}-${episode}`,
-          ),
-          12_000,
-        );
-        return mapResult(env, provider, audio);
+        try {
+          const env = await withTimeout(
+            get<WatchEnvelope>(
+              `/watch/${provider}/${anilistId}/${audio}/${provider}-${episode}`,
+            ),
+            12_000,
+          );
+          const result = mapResult(env, provider, audio);
+          console.info(
+            `[Anivexa] ${provider}: ${result.streams.length} playable stream(s)`,
+          );
+          return { provider, result };
+        } catch (e) {
+          console.warn(`[Anivexa] ${provider} failed:`, e instanceof Error ? e.message : String(e));
+          throw e;
+        }
       }),
     );
 
     const streams: StreamSource[] = [];
     const subtitles: SubtitleTrack[] = [];
-    for (const r of results) {
-      if (r.status !== 'fulfilled') continue;
-      streams.push(...r.value.streams);
-      if (subtitles.length === 0) subtitles.push(...r.value.subtitles);
+    const failed: string[] = [];
+    const empty: string[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const provider = ANIVEXA_PROVIDERS[i];
+      if (r.status !== 'fulfilled') {
+        failed.push(`${provider}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+        continue;
+      }
+      const { result } = r.value;
+      if (result.streams.length === 0) empty.push(provider);
+      streams.push(...result.streams);
+      if (subtitles.length === 0) subtitles.push(...result.subtitles);
     }
+
+    console.info(
+      `[Anivexa] summary for AniList ${anilistId} ep ${episode}: ${streams.length} stream(s), ${failed.length} failed, ${empty.length} empty`,
+    );
+
+    if (streams.length === 0) {
+      const details = [
+        failed.length ? `failed: ${failed.slice(0, 6).join(' | ')}` : '',
+        empty.length ? `no playable sources: ${empty.join(', ')}` : '',
+      ].filter(Boolean).join('; ');
+      throw new Error(
+        `Anivexa: no playable streams from ${ANIVEXA_PROVIDERS.length} providers${details ? ` (${details})` : ''}`,
+      );
+    }
+
     return { streams, subtitles };
   },
 
