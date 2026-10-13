@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "kitawatch"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "discord-rich-presence",
  "dotenvy",
