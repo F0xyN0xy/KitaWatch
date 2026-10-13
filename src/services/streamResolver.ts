@@ -55,12 +55,29 @@ function titleContext(animeId: number | string, title: string | undefined) {
 /** Order streams by the user's provider preference list (prefix match on
  *  "server" so e.g. "anikage:koto" follows "anikage"). */
 function prioritize(streams: StreamSource[]): StreamSource[] {
-  const order = useSettingsStore.getState().providerPriority;
+  const order = useSettingsStore.getState().providerPriority.map((p) => p.toLowerCase());
+
   const rank = (s: StreamSource) => {
     if (s.verified === false) return 999; // probed dead — sink to the bottom
-    const i = order.findIndex((o) => s.server === o || s.server?.startsWith(`${o}:`));
-    return i === -1 ? 99 : i;
+
+    const server = (s.server ?? '').toLowerCase();
+    // Anivexa labels its streams "anivexa:<provider>", while the settings
+    // list stores the provider name by itself (e.g. "anizone"). Compare
+    // both the complete tag and the nested provider name.
+    const candidates = server.startsWith('anivexa:')
+      ? [server, server.slice('anivexa:'.length), 'anivexa']
+      : [server];
+
+    let best = 99;
+    for (const candidate of candidates) {
+      const i = order.findIndex(
+        (entry) => candidate === entry || candidate.startsWith(`${entry}:`),
+      );
+      if (i !== -1) best = Math.min(best, i);
+    }
+    return best;
   };
+
   return [...streams].sort((a, b) => rank(a) - rank(b));
 }
 
