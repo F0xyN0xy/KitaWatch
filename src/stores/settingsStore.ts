@@ -16,6 +16,12 @@ export const PROVIDER_PRIORITY = [
   'animegg',
   'mkissa',
   'animeonsen',
+  // Additional Anivexa providers (lower priority unless moved by the user)
+  'anidbapp',
+  '2dhive',
+  'animenosub',
+  'senshi',
+  'animedunya',
   // standalone providers
   'anify',
   'anikage',
