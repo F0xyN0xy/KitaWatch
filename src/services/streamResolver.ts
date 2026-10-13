@@ -55,12 +55,29 @@ function titleContext(animeId: number | string, title: string | undefined) {
 /** Order streams by the user's provider preference list (prefix match on
  *  "server" so e.g. "anikage:koto" follows "anikage"). */
 function prioritize(streams: StreamSource[]): StreamSource[] {
-  const order = useSettingsStore.getState().providerPriority;
+  const order = useSettingsStore.getState().providerPriority.map((p) => p.toLowerCase());
+
   const rank = (s: StreamSource) => {
     if (s.verified === false) return 999; // probed dead — sink to the bottom
-    const i = order.findIndex((o) => s.server === o || s.server?.startsWith(`${o}:`));
-    return i === -1 ? 99 : i;
+
+    const server = (s.server ?? '').toLowerCase();
+    // Anivexa labels its streams "anivexa:<provider>", while the settings
+    // list stores the provider name by itself (e.g. "anizone"). Compare
+    // both the complete tag and the nested provider name.
+    const candidates = server.startsWith('anivexa:')
+      ? [server, server.slice('anivexa:'.length), 'anivexa']
+      : [server];
+
+    let best = 99;
+    for (const candidate of candidates) {
+      const i = order.findIndex(
+        (entry) => candidate === entry || candidate.startsWith(`${entry}:`),
+      );
+      if (i !== -1) best = Math.min(best, i);
+    }
+    return best;
   };
+
   return [...streams].sort((a, b) => rank(a) - rank(b));
 }
 
@@ -288,18 +305,58 @@ async function resolveStreamsInner(
       ]),
   ];
 
-  // Run every attempt concurrently; each failure is recorded (live array,
-  // visible even to callers who already received the result) and re-thrown.
-  // "Confident miss" errors (verifier rejected the title, episode absent
-  // from the listing) mean the provider DOESN'T HAVE this anime — different
-  // from a network/500 failure. When every provider confidently misses, the
-  // anime is genuinely unavailable and the UI should say so plainly.
+  // Run every attempt concurrently. Show the first successful result immediately,
+  // then merge each later provider as soon as it resolves. Do not wait for
+  // Promise.allSettled: a single hung provider must not block Anivexa/AniKage
+  // sources that have already been found.
   const MISS_RE = /no confident title match|episode not found|lacks this episode|too short for airing|title not found|no page found/i;
   const missFlags: boolean[] = attempts.map(() => false);
+  const completed: TaggedResult[] = [];
+  let liveValue: ResolvedStreams | undefined;
+  const mergeResult = (tagged: TaggedResult) => {
+    if (!liveValue) return;
+
+    const seen = new Set(liveValue.streams.map((s) => s.url));
+    let added = 0;
+    for (const s of tagged.result.streams) {
+      if (seen.has(s.url)) continue;
+      seen.add(s.url);
+      liveValue.streams.push(s);
+      added++;
+    }
+
+    const sorted = prioritize(liveValue.streams);
+    const orderChanged = sorted.some((s, i) => s !== liveValue!.streams[i]);
+    if (added > 0 || orderChanged) liveValue.streams = sorted;
+
+    // Keep subtitles aligned with the highest-priority provider family.
+    const topFamily = liveValue.streams.length > 0 ? familyOf(liveValue.streams[0]) : '';
+    if (
+      tagged.tag === topFamily &&
+      tagged.result.subtitles &&
+      tagged.result.subtitles.length > 0
+    ) {
+      liveValue.subtitles = tagged.result.subtitles;
+    }
+
+    if (added > 0 || orderChanged) {
+      streamUpdates.dispatchEvent(
+        new CustomEvent('update', { detail: `${animeId}|${episode}|${audio}` }),
+      );
+      void verify(liveValue);
+    }
+  };
+
   const pending = attempts.map((a, i) =>
-    a
-      .run()
-      .then((result): TaggedResult => ({ tag: a.tag, result }))
+    a.run()
+      .then((result): TaggedResult => {
+        const tagged = { tag: a.tag, result };
+        completed.push(tagged);
+        // If the first result has already been published, merge this provider
+        // immediately instead of waiting for slower unrelated providers.
+        if (liveValue) mergeResult(tagged);
+        return tagged;
+      })
       .catch((e: unknown) => {
         const msg = errMsg(e);
         errors.push(msg);
@@ -308,86 +365,41 @@ async function resolveStreamsInner(
       }),
   );
 
-  const allSettled = Promise.allSettled(pending);
-
   let first: TaggedResult;
-  // For adult titles, only the hanime provider is in the race — await it
-  // directly. For regular anime, race all providers.
   try {
+    // For adult titles, only the dedicated Hanime provider is in the race.
+    // For regular titles, the first provider to succeed starts playback.
     first = adult ? await pending[0] : await Promise.any(pending);
   } catch (e) {
     if (adult || e instanceof AggregateError) {
-      const unavailable =
-        missFlags.length > 0 && missFlags.every(Boolean);
-
+      const unavailable = missFlags.length > 0 && missFlags.every(Boolean);
       return { streams: [], errors, unavailable };
     }
     throw e;
   }
 
-    // Immediate result — playback starts from this, no merge waiting.
-  // Dedupe the winner's own list first: aggregators (Anivexa races ~15
-  // sub-providers internally) can return the same URL twice, which both
-  // wastes pills and trips React duplicate-key warnings in the sources list.
+  // Immediate result — playback starts from the first successful provider.
   const winnerSeen = new Set<string>();
   const winnerStreams = first.result.streams.filter((s) =>
     winnerSeen.has(s.url) ? false : (winnerSeen.add(s.url), true),
   );
-  const value: ResolvedStreams = {
+  liveValue = {
     streams: prioritize(winnerStreams),
     subtitles: first.result.subtitles,
     errors,
   };
 
-  // Probe the race winner's streams in the background so dead URLs sink
-  // down the list while playback starts.
-  void verify(value);
+  // Providers may resolve in the small interval between Promise.any winning
+  // and liveValue being assigned. Merge anything already completed now.
+  for (const tagged of completed) {
+    if (tagged !== first) mergeResult(tagged);
+  }
 
-  // Background merge: late providers append streams (deduped) to the LIVE
-  // result and fire an update event so pages re-render with the fuller list.
-  void (async () => {
-    const settled = await Promise.race([
-      allSettled,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000)),
-    ]);
-    if (!settled) return;
+  // Probe existing streams without delaying the live provider merge.
+  void verify(liveValue);
 
-    const ok: TaggedResult[] = (
-      settled.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<TaggedResult>[]
-    ).map((r) => r.value);
-
-    const seen = new Set(value.streams.map((s) => s.url));
-    let added = 0;
-    for (const { result } of ok) {
-      for (const s of result.streams) {
-        if (seen.has(s.url)) continue;
-        seen.add(s.url);
-        value.streams.push(s);
-        added++;
-      }
-    }
-    if (added > 0) value.streams = prioritize(value.streams);
-
-    // Subtitles follow the provider family of the top-prioritized stream.
-    if (value.streams.length > 0) {
-      const topFamily = familyOf(value.streams[0]);
-      const better = ok.find(
-        (t) => t.tag === topFamily && t.result.subtitles && t.result.subtitles.length > 0,
-      );
-      if (better) value.subtitles = better.result.subtitles;
-    }
-
-    // Newly merged streams need verification too.
-    void verify(value);
-
-    if (added > 0) {
-      streamUpdates.dispatchEvent(
-        new CustomEvent('update', { detail: `${animeId}|${episode}|${audio}` }),
-      );
-    }
-  })();
-
-  return value;
+  if (!liveValue) throw new Error('Stream resolver completed without a result');
+  return liveValue;
 }
 
 export async function resolveStreams(
