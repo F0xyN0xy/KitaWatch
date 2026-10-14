@@ -288,14 +288,39 @@ export default function Watch() {
         httpPlayer
       ) : torrentSource ? (
         torrentPlayer
-      ) : allSources.length === 0 ? null : (
+      ) : allSources.length === 0 ? (
+        streams.data ? (
+          <ErrorState
+            title={
+              streams.data.errors.some((e) =>
+                /cannot be played in-app|X-Frame-Options|frame-ancestors|no provider-supported embed/i.test(e),
+              )
+                ? 'Provider cannot be embedded'
+                : streams.data.unavailable
+                  ? 'Not available on any provider'
+                  : 'No playable stream found'
+            }
+            message={
+              streams.data.errors.some((e) =>
+                /cannot be played in-app|X-Frame-Options|frame-ancestors|no provider-supported embed/i.test(e),
+              )
+                ? 'The provider was found, but it does not expose a playback method supported by KitaWatch. The app cannot override the provider’s framing restrictions.'
+                : streams.data.unavailable
+                  ? 'No provider carries this episode right now. Try again later.'
+                  : 'No playable source was returned. Check the diagnostic details below or retry.'
+            }
+            details={streams.data.errors}
+            onRetry={() => {
+              setFailedKeys(new Set());
+              setActiveKey(null);
+              streams.reload();
+            }}
+          />
+        ) : null
+      ) : (
         <ErrorState
-          title={streams.data?.unavailable ? 'Not available on any provider' : 'No playable stream found'}
-          message={
-            streams.data?.unavailable
-              ? 'No provider carries this anime (or this episode) right now. It may be too new, too niche, or licensed away. Try again later, or check the torrent fallback below.'
-              : 'Every source failed. Retry, or try the torrent fallback below.'
-          }
+          title="No playable stream found"
+          message="Every source failed. Retry, or try the torrent fallback below."
           details={streams.data?.errors}
           onRetry={() => {
             setFailedKeys(new Set());
