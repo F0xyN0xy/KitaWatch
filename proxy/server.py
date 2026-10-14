@@ -126,7 +126,13 @@ async def cors(u: str = Query(...), ref: str | None = None, request: object = No
         r = await _get(u, ref, 30.0)
     except Exception as e:
         print(f"[proxy error] {e}")
-        return JSONResponse({"error": "proxy request failed"}, status_code=502)
+        return JSONResponse(
+            {
+                "error": "All configured AnimePahe mirrors failed",
+                "details": last_err,
+            },
+            status_code=502,
+        )
     return Response(
         content=r.content,
         status_code=r.status_code,

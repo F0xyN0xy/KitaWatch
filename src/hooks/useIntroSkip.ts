@@ -16,7 +16,6 @@ export interface SkipTimes {
  * try each endpoint until one answers. Field names are parsed defensively
  * (camelCase AND snake_case) because the mirrors and the old API differ. */
 const ENDPOINTS = [
-  'https://api.aniskip.com/api/v2',
   'https://aniskip-mirror.vercel.app/v2',
   'https://aniskip-mirror-cf.yasar-123-sevda.workers.dev/v2',
 ];

@@ -139,7 +139,7 @@ function EmbedPlayer({ source, onFatal }: Pick<Props, 'source' | 'onFatal'>) {
           src={source.url}
           title={`Video player (${host})`}
           className="h-full w-full border-0 bg-black"
-          allow="fullscreen; picture-in-picture"
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
           referrerPolicy="strict-origin-when-cross-origin"
           sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox"
           onLoad={() => setLoaded(true)}

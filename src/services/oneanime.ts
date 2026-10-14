@@ -17,15 +17,39 @@ function proxyBase(): string {
 
 async function get<T>(path: string): Promise<T> {
   const url = `${BASE}${path}`;
+  let lastError = 'Request failed';
+
   try {
     const res = await fetch(url);
+
     if (res.ok) return (await res.json()) as T;
-  } catch {
-    // fall through to proxy
+
+    lastError = `Direct request returned HTTP ${res.status}`;
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error);
   }
-  const res = await fetch(`${proxyBase()}/cors?u=${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`1anime responded ${res.status}`);
-  return (await res.json()) as T;
+
+  try {
+    const res = await fetch(
+      `${proxyBase()}/cors?u=${encodeURIComponent(url)}`,
+    );
+
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 500);
+      throw new Error(
+        `Proxy returned HTTP ${res.status}: ${body || 'empty response'}`,
+      );
+    }
+
+    return (await res.json()) as T;
+  } catch (error) {
+    const proxyError =
+      error instanceof Error ? error.message : String(error);
+
+    throw new Error(
+      `1anime request failed. Direct: ${lastError}. Proxy: ${proxyError}`,
+    );
+  }
 }
 
 interface RawStream {
