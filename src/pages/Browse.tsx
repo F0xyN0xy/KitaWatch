@@ -5,7 +5,8 @@ import AnimeGrid from '@/components/anime/AnimeGrid';
 import Skeleton from '@/components/ui/Skeleton';
 import ErrorState from '@/components/ui/ErrorState';
 import Button from '@/components/ui/Button';
-import { api } from '@/services/api';
+import { api, isAdultSearchIntent } from '@/services/api';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { AnimeSummary, FilterSort } from '@/types';
 
 const SORTS = [
@@ -23,6 +24,9 @@ export default function Browse() {
   const sort: SortKey =
     rawSort === 'popular' || rawSort === 'recent' ? rawSort : 'trending';
   const genre = searchParams.get('genre') ?? '';
+  const adultProvidersUnavailable = useSettingsStore((s) => s.adultProvidersUnavailable);
+  const blockedAdultIntent =
+    adultProvidersUnavailable && isAdultSearchIntent(q || genre);
 
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<AnimeSummary[]>([]);
@@ -46,6 +50,15 @@ export default function Browse() {
   useEffect(() => {
     let cancelled = false;
     setError(null);
+    if (blockedAdultIntent) {
+      setItems([]);
+      setHasNext(false);
+      setLoading(false);
+      setLoadingMore(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     if (page === 1) setLoading(true);
     else setLoadingMore(true);
 
@@ -78,7 +91,7 @@ export default function Browse() {
     return () => {
       cancelled = true;
     };
-  }, [q, sort, genre, page, retryKey]);
+  }, [q, sort, genre, page, retryKey, blockedAdultIntent]);
 
   const updateParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
@@ -145,7 +158,19 @@ export default function Browse() {
         </div>
       </div>
 
-      {loading && (
+      {blockedAdultIntent && (
+        <div role="status" className="rounded-xl bg-ink-900 p-5 ring-1 ring-white/10">
+          <h2 className="text-sm font-semibold text-white">
+            Adult-content providers temporarily unavailable
+          </h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Sorry, we're working on these providers. They are unavailable right now.
+            Please try again later.
+          </p>
+        </div>
+      )}
+
+      {!blockedAdultIntent && loading && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {Array.from({ length: 12 }).map((_, i) => (
             <Skeleton key={i} className="aspect-[2/3]" />
@@ -153,7 +178,7 @@ export default function Browse() {
         </div>
       )}
 
-      {!loading && error && (
+      {!blockedAdultIntent && !loading && error && (
         <ErrorState
           title="Couldn't load anime"
           message={error}
@@ -161,7 +186,7 @@ export default function Browse() {
         />
       )}
 
-      {!loading && !error && (
+      {!blockedAdultIntent && !loading && !error && (
         <>
           {items.length === 0 ? (
             <p className="py-16 text-center text-sm text-zinc-500">

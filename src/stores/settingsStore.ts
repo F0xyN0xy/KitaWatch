@@ -80,6 +80,8 @@ interface SettingsState {
    * without ever writing them to their public AniList history.
    */
   updateAdultProgress: boolean;
+  /** Temporarily hide adult content while its providers are unavailable. */
+  adultProvidersUnavailable: boolean;
   /** Show the current anime/episode as Discord activity. */
   discordRichPresence: boolean;
   /**
@@ -100,6 +102,7 @@ interface SettingsState {
   setLastFullscreen: (v: boolean) => void;
   setShowAdultContent: (v: boolean) => void;
   setUpdateAdultProgress: (v: boolean) => void;
+  setAdultProvidersUnavailable: (v: boolean) => void;
   setDiscordRichPresence: (v: boolean) => void;
 }
 
@@ -124,6 +127,8 @@ export const useSettingsStore = create<SettingsState>()(
       // explicitly opts in — H entries would otherwise land in their
       // public activity feed the moment the toggle above is flipped.
       updateAdultProgress: false,
+      // Enabled by default while adult-content providers are under maintenance.
+      adultProvidersUnavailable: true,
       // Rich presence is on by default and always uses KitaWatch's own
       // Discord application — users never need a Developer Portal app.
       discordRichPresence: true,
@@ -141,11 +146,13 @@ export const useSettingsStore = create<SettingsState>()(
       setLastFullscreen: (lastFullscreen) => set({ lastFullscreen }),
       setShowAdultContent: (showAdultContent) => set({ showAdultContent }),
       setUpdateAdultProgress: (updateAdultProgress) => set({ updateAdultProgress }),
+      setAdultProvidersUnavailable: (adultProvidersUnavailable) =>
+        set({ adultProvidersUnavailable }),
       setDiscordRichPresence: (discordRichPresence) => set({ discordRichPresence }),
     }),
     {
       name: 'kitawatch-settings',
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -179,6 +186,10 @@ export const useSettingsStore = create<SettingsState>()(
         // v6 introduced updateAdultProgress (AniList progress for H titles).
         // Absent in older persisted states — the false default above applies,
         // so upgrades keep the safe default. Nothing to rewrite.
+        if (version < 7) {
+          // Start the temporary provider-maintenance mode enabled on upgrade.
+          s.adultProvidersUnavailable = true;
+        }
         return s as SettingsState;
       },
     },
