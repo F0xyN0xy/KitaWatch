@@ -137,9 +137,19 @@ export function normalizeAnime(raw: unknown): AnimeSummary {
 // Direct ID access (details, watch, own favorites) is never filtered.
 
 const ADULT_QUERY_RE = /hentai/i;
+const ADULT_INTENT_RE = /hentai|adult(?:\s+content)?|18\+/i;
+
+/** Detect explicit adult-search intent so Browse can show the maintenance notice. */
+export function isAdultSearchIntent(value?: string): boolean {
+  return !!value && ADULT_INTENT_RE.test(value);
+}
 
 export function adultContentAllowed(explicit?: string): boolean {
-  if (useSettingsStore.getState().showAdultContent) return true;
+  const settings = useSettingsStore.getState();
+  // The temporary maintenance switch overrides both explicit searches and
+  // the normal visibility toggle until adult-content providers are available.
+  if (settings.adultProvidersUnavailable) return false;
+  if (settings.showAdultContent) return true;
   return !!explicit && ADULT_QUERY_RE.test(explicit);
 }
 
