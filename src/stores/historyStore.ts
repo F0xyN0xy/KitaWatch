@@ -62,7 +62,15 @@ export const useHistoryStore = create<HistoryState>()(
             prev && prev.episode === e.episode
               ? { position: prev.position, duration: prev.duration }
               : {};
-          const entry: HistoryEntry = { ...e, episode, ...keep, updatedAt: Date.now() };
+          const entry: HistoryEntry = {
+            ...e,
+            episode,
+            ...keep,
+            ...(typeof e.rating === 'number' || prev?.rating === undefined
+              ? {}
+              : { rating: prev.rating }),
+            updatedAt: Date.now(),
+          };
           return {
             entries: [
               entry,
