@@ -12,6 +12,7 @@ export interface HistoryEntry {
   position?: number;
   duration?: number;
   updatedAt: number;
+  rating?: number;
 }
 
 /**
@@ -40,6 +41,7 @@ interface HistoryState {
   entries: HistoryEntry[];
   upsert: (e: Omit<HistoryEntry, 'position' | 'duration' | 'updatedAt'>) => void;
   updatePosition: (animeId: number, episode: number, position: number, duration: number) => void;
+  updateRating: (animeId: number, rating: number) => void;
   remove: (animeId: number) => void;
 }
 
@@ -60,7 +62,15 @@ export const useHistoryStore = create<HistoryState>()(
             prev && prev.episode === e.episode
               ? { position: prev.position, duration: prev.duration }
               : {};
-          const entry: HistoryEntry = { ...e, episode, ...keep, updatedAt: Date.now() };
+          const entry: HistoryEntry = {
+            ...e,
+            episode,
+            ...keep,
+            ...(typeof e.rating === 'number' || prev?.rating === undefined
+              ? {}
+              : { rating: prev.rating }),
+            updatedAt: Date.now(),
+          };
           return {
             entries: [
               entry,
@@ -77,6 +87,12 @@ export const useHistoryStore = create<HistoryState>()(
             x.animeId === animeId && x.episode === episode
               ? { ...x, position, duration, updatedAt: Date.now() }
               : x,
+          ),
+        })),
+      updateRating: (animeId, rating) =>
+        set((s) => ({
+          entries: s.entries.map((e) =>
+            e.animeId === animeId ? { ...e, rating } : e,
           ),
         })),
       remove: (animeId) => set((s) => ({ entries: s.entries.filter((e) => e.animeId !== animeId) })),

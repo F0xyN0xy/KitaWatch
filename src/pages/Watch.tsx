@@ -149,6 +149,7 @@ export default function Watch() {
         episode: epNum,
         title: info.data.title,
         cover: info.data.cover,
+        rating: info.data.rating,
       });
     }
   }, [info.data, id, epNum]);

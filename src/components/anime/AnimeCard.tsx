@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Star } from 'lucide-react';
+import { Star, X } from 'lucide-react';
 import type { AnimeSummary } from '@/types';
 import Badge from '@/components/ui/Badge';
 
@@ -12,9 +12,11 @@ interface Props {
   href?: string;
   /** Small accent label shown on the cover (e.g. "E7"). */
   badge?: string;
+  /** Optional action to remove this anime from a list. */
+  onRemove?: () => void;
 }
 
-function AnimeCard({ anime, index = 0, href, badge }: Props) {
+function AnimeCard({ anime, index = 0, href, badge, onRemove }: Props) {
   const rating = typeof anime.rating === 'number' ? anime.rating : undefined;
 
   // normalizeAnime falls back to id 0 when upstream IDs won't parse —
@@ -48,7 +50,7 @@ function AnimeCard({ anime, index = 0, href, badge }: Props) {
             </div>
           )}
           {rating != null && (
-            <div className="absolute right-2 top-2">
+            <div className={onRemove ? 'absolute right-11 top-2' : 'absolute right-2 top-2'}>
               <Badge variant="rating">
                 <Star className="h-3 w-3 fill-current" />
                 {rating.toFixed(1)}
@@ -69,6 +71,21 @@ function AnimeCard({ anime, index = 0, href, badge }: Props) {
           {anime.title}
         </p>
       </Link>
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={`Remove ${anime.title} from Continue Watching`}
+          title="Remove from Continue Watching"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onRemove();
+          }}
+          className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/75 text-white shadow transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
     </motion.div>
   );
 }
