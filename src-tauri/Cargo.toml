@@ -15,7 +15,7 @@ tauri-build = { version = "2.7.3", features = [] }
 [dependencies]
 tauri = { version = "2.12.4", features = ["devtools"] }
 tauri-plugin-opener = "2.7.2"
-tauri-plugin-deep-link = "2.6.2"
+tauri-plugin-deep-link = "=2.6.1"
 tauri-plugin-shell = "2.5.0"
 tauri-plugin-updater = "2.14.0"
 tauri-plugin-window-state = "2"
@@ -26,7 +26,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 discord-rich-presence = "0.2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-tauri-plugin-single-instance = { version = "2.5.4", features = ["deep-link"] }
+tauri-plugin-single-instance = { version = "=2.5.3", features = ["deep-link"] }
 
 # Die-with-parent wiring for spawned sidecars (see src/proc_group.rs).
 # Windows: Job Object with KILL_ON_JOB_CLOSE — the kernel kills the whole
