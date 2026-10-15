@@ -395,13 +395,10 @@ function MediaPlayer({
           ? resumeEntry.position
           : null;
       const onMeta = () => {
+        // Restore the resume point once the media metadata is available.
+        // AniList progress is updated only by the video:ended handler above;
+        // starting an episode must not mark it as watched.
         if (resumeAt != null) player.currentTime = resumeAt;
-        // Real metadata => the stream is genuine (not a 403 page), so the
-        // user is actually watching this episode. Push to AniList now —
-        // "started ep N" is the progress AniList expects (progress = last
-        // watched). The monotonic guard in pushProgress de-dupes seeks and
-        // re-mounts; H titles are gated by the updateAdultProgress setting.
-        pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
       };
       player.video.addEventListener('loadedmetadata', onMeta, { once: true });
       disposers.push(() => player.video.removeEventListener('loadedmetadata', onMeta));
