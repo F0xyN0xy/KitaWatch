@@ -14,9 +14,11 @@ interface Props {
   getHref?: (anime: AnimeSummary) => string | undefined;
   /** Per-item cover label (e.g. "E7"). */
   getBadge?: (anime: AnimeSummary) => string | undefined;
+  /** Optional action for removing an individual anime from this row. */
+  onRemove?: (anime: AnimeSummary) => void;
 }
 
-export default function AnimeRow({ title, items, loading, getProgress, getHref, getBadge }: Props) {
+export default function AnimeRow({ title, items, loading, getProgress, getHref, getBadge, onRemove }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: 1 | -1) =>
@@ -55,7 +57,7 @@ export default function AnimeRow({ title, items, loading, getProgress, getHref, 
           const p = getProgress?.(a);
           return (
             <div key={a.id} className="relative w-[150px] shrink-0 sm:w-[170px]">
-              <AnimeCard anime={a} index={i} href={getHref?.(a)} badge={getBadge?.(a)} />
+              <AnimeCard anime={a} index={i} href={getHref?.(a)} badge={getBadge?.(a)} onRemove={onRemove ? () => onRemove(a) : undefined} />
               {p != null && p > 0 && (
                 <div className="pointer-events-none absolute bottom-1.5 left-2 right-2 h-1 overflow-hidden rounded-full bg-white/20">
                   <div

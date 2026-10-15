@@ -12,6 +12,7 @@ export interface HistoryEntry {
   position?: number;
   duration?: number;
   updatedAt: number;
+  rating?: number;
 }
 
 /**

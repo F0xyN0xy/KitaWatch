@@ -56,6 +56,7 @@ export default function Home() {
   const popular = useApi(() => api.popular(1, 14), []);
   const recent = useApi(() => api.recent(1, 14), []);
   const historyEntries = useHistoryStore((s) => s.entries);
+  const removeHistory = useHistoryStore((s) => s.remove);
   const continueWatching = historyEntries.slice(0, 14).map((h) => ({
     id: h.animeId,
     title: h.title,
@@ -109,6 +110,7 @@ export default function Home() {
           items={continueWatching}
           getProgress={(a) => progressById.get(a.id)}
           getBadge={(a) => `E${episodeById.get(a.id) ?? 1}`}
+          onRemove={(anime) => removeHistory(anime.id)}
         />
       )}
 
