@@ -10,23 +10,23 @@ name = "kitawatch_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
-tauri-plugin-opener = "2"
-tauri-plugin-deep-link = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-updater = "2"
+tauri = { version = "2.12.4", features = ["devtools"] }
+tauri-plugin-opener = "2.7.2"
+tauri-plugin-deep-link = "2.6.2"
+tauri-plugin-shell = "2.5.0"
+tauri-plugin-updater = "2.14.0"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0.154"
 dotenvy = "0.15"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 discord-rich-presence = "0.2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-single-instance = { version = "2.5.4", features = ["deep-link"] }
 
 # Die-with-parent wiring for spawned sidecars (see src/proc_group.rs).
 # Windows: Job Object with KILL_ON_JOB_CLOSE — the kernel kills the whole
@@ -34,7 +34,7 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 # Win32_Security is required: CreateJobObjectW's SECURITY_ATTRIBUTES parameter
 # lives there, and the function is cfg-gated behind that feature in windows-sys.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",

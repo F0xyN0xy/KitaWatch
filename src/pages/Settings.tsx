@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Bug, Gamepad2, Github, LogOut, MessageSquareWarning, RefreshCw, Trash2 } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
+import { Bug, Gamepad2, LogOut, MessageSquareWarning, RefreshCw, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import UpdatesPanel from '@/components/UpdatesPanel';
@@ -381,7 +382,7 @@ export default function Settings() {
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-lg bg-ink-800 px-3 py-1.5 text-xs text-zinc-300 ring-1 ring-white/10 transition hover:text-white hover:ring-accent-500/50"
           >
-            <Github className="h-3.5 w-3.5" /> GitHub
+            <GitBranch className="h-3.5 w-3.5" /> GitHub
           </a>
         </div>
         <Disclaimer />
