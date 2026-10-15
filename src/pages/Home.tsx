@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
@@ -57,10 +58,37 @@ export default function Home() {
   const recent = useApi(() => api.recent(1, 14), []);
   const historyEntries = useHistoryStore((s) => s.entries);
   const removeHistory = useHistoryStore((s) => s.remove);
+
+  // Backfill ratings for history entries saved before rating persistence was added.
+  // Successfully fetched ratings are written to the persisted history store.
+  useEffect(() => {
+    let cancelled = false;
+    const missingRatings = historyEntries.filter((entry) => typeof entry.rating !== 'number');
+    if (missingRatings.length === 0) return;
+
+    void Promise.all(
+      missingRatings.map(async (entry) => {
+        try {
+          const anime = await api.info(entry.animeId);
+          if (!cancelled && typeof anime.rating === 'number') {
+            useHistoryStore.getState().updateRating(entry.animeId, anime.rating);
+          }
+        } catch {
+          // Keep the card usable; a later Home visit can retry the lookup.
+        }
+      }),
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [historyEntries]);
+
   const continueWatching = historyEntries.slice(0, 14).map((h) => ({
     id: h.animeId,
     title: h.title,
     cover: h.cover,
+    rating: h.rating,
   }));
   // #7: watched fraction per anime for the Continue Watching progress bars.
   const progressById = new Map<number, number | undefined>(
