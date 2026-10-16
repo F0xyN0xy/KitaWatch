@@ -123,7 +123,20 @@ test('extractors: no mislabeling, no duplicates, no relative/garbage URLs', () =
     ].sort(),
   );
   // JSON-LD embedUrl is a frame candidate, not an "mp4"
-  assert.ok(extractEmbedCandidates(page, 'https://site.example').includes('https://p.example/embed/9'));
+  assert.ok(
+    extractEmbedCandidates(page, 'https://site.example').some((candidate) => {
+      try {
+        const parsed = new URL(candidate);
+        return (
+          parsed.protocol === 'https:' &&
+          parsed.hostname === 'p.example' &&
+          parsed.pathname === '/embed/9'
+        );
+      } catch {
+        return false;
+      }
+    }),
+  );
   assert.ok(
     extractEmbedCandidates(page, 'https://site.example').every((candidate) => {
       try {
