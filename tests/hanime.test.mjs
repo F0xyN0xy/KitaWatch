@@ -14,7 +14,8 @@ function mockWeb(routes) {
   globalThis.fetch = async (input) => {
     const url = String(input);
     calls.push(url);
-    if (url.includes('graphql.anilist.co')) {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname === 'graphql.anilist.co' && parsedUrl.pathname === '/') {
       return json({ data: { Media: { id: 113417, title: { english: 'Overflow', romaji: 'Overflow' }, episodes: 8 } } });
     }
     for (const [prefix, make] of Object.entries(routes)) {
