@@ -184,7 +184,7 @@ export default function Watch() {
       episodeNumber={epNum}
       hasNextEpisode={hasNext}
       autoplayNext={autoplayNext}
-      subtitles={streams.data?.subtitles}
+      subtitles={activeSource.subtitles}
       poster={info.data?.banner ?? info.data?.cover}
       onFatal={() => {
         // Mark the dead source; playback falls through to the next live
