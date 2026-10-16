@@ -350,7 +350,17 @@ async function resolveStreamsInner(
   const pending = attempts.map((a, i) =>
     a.run()
       .then((result): TaggedResult => {
-        const tagged = { tag: a.tag, result };
+        // Preserve provider-specific subtitle lists when present. Otherwise,
+        // attach the provider-level list to its streams so switching sources
+        // also switches the subtitles instead of keeping a stale global track.
+        const sourceResult: ProviderResult = {
+          ...result,
+          streams: result.streams.map((stream) => ({
+            ...stream,
+            subtitles: stream.subtitles ?? result.subtitles ?? [],
+          })),
+        };
+        const tagged = { tag: a.tag, result: sourceResult };
         completed.push(tagged);
         // If the first result has already been published, merge this provider
         // immediately instead of waiting for slower unrelated providers.

@@ -285,6 +285,7 @@ function MediaPlayer({
         theme: '#9333ea',
         screenshot: true,
         setting: true,
+        subtitleOffset: true,
         pip: true,
         fullscreen: true,
         playbackRate: true,
