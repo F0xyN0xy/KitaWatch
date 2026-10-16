@@ -36,6 +36,14 @@ cp .env.example .env
 npm run dev
 ```
 
+## Diagnostics
+
+The service logs structured JSON lines to stdout/stderr, including startup checks, Discord gateway connection, permission checks, webhook receipt/signature failures, comment sync failures, and GitHub API errors. Never include bot tokens or webhook secrets in logs.
+
+- `GET /health` is a minimal health endpoint.
+- `GET /diagnostics` is disabled (404) unless `DIAGNOSTICS_TOKEN` is set. When enabled, call it with `Authorization: Bearer YOUR_DIAGNOSTICS_TOKEN`. It checks SQLite writes, Discord connection/forum permissions, and GitHub repository access. The endpoint does not return credentials; keep the diagnostics token private.
+- In WispByte, inspect the service console/logs first. If startup fails, check missing environment variables, Node.js version, native dependency installation for `better-sqlite3`, and the configured persistent database path.
+
 ## Important hosting checks
 
 Before enabling the GitHub webhook, confirm WispByte provides both (a) a persistent writable path for SQLite and (b) inbound HTTPS routing to the process's `PORT`. A domain alone does not guarantee inbound webhooks work. If either is unavailable, use a managed PostgreSQL database or a host with persistent storage and public HTTP ingress.
