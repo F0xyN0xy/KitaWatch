@@ -144,6 +144,23 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
     }
 
     const referer = s.referer ?? s.headers?.Referer ?? s.headers?.referer ?? envReferer;
+    // Keep subtitle tracks on the exact stream that supplied them. A provider
+    // response can contain multiple streams with different subtitle tracks.
+    const sourceSubtitles: SubtitleTrack[] = [];
+    for (const sub of s.subtitles ?? []) {
+      if (!sub.url) continue;
+      let fmt = (sub.format ?? '').toLowerCase();
+      if (!fmt) {
+        try {
+          fmt = new URL(sub.url).pathname.split('.').pop()?.toLowerCase() ?? '';
+        } catch {
+          fmt = '';
+        }
+      }
+      if (fmt !== 'vtt' && fmt !== 'srt') continue;
+      sourceSubtitles.push({ url: sub.url, lang: sub.label ?? sub.srclang ?? 'sub' });
+    }
+
     streams.push({
       type,
       url: u,
@@ -152,24 +169,11 @@ function mapResult(env: WatchEnvelope, provider: string, audio: AudioType): Aniv
       quality: s.quality,
       referer,
       viaProxy: !!referer,
+      subtitles: sourceSubtitles,
     });
 
-    // First stream with usable (VTT/SRT) subtitles wins — ASS isn't rendered in-app.
-    if (subtitles.length === 0) {
-      for (const sub of s.subtitles ?? []) {
-        if (!sub.url) continue;
-        let fmt = (sub.format ?? '').toLowerCase();
-        if (!fmt) {
-          try {
-            fmt = new URL(sub.url).pathname.split('.').pop()?.toLowerCase() ?? '';
-          } catch {
-            fmt = '';
-          }
-        }
-        if (fmt !== 'vtt' && fmt !== 'srt') continue;
-        subtitles.push({ url: sub.url, lang: sub.label ?? sub.srclang ?? 'sub' });
-      }
-    }
+    // Retain the first available set for callers that still use provider-level tracks.
+    if (subtitles.length === 0) subtitles.push(...sourceSubtitles);
   }
 
   if (raw.length > 0 && streams.length === 0) {
