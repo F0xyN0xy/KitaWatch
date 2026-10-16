@@ -14,7 +14,8 @@ function mockWeb(routes) {
   globalThis.fetch = async (input) => {
     const url = String(input);
     calls.push(url);
-    if (url.includes('graphql.anilist.co')) {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname === 'graphql.anilist.co' && parsedUrl.pathname === '/') {
       return json({ data: { Media: { id: 113417, title: { english: 'Overflow', romaji: 'Overflow' }, episodes: 8 } } });
     }
     for (const [prefix, make] of Object.entries(routes)) {
@@ -123,5 +124,13 @@ test('extractors: no mislabeling, no duplicates, no relative/garbage URLs', () =
   );
   // JSON-LD embedUrl is a frame candidate, not an "mp4"
   assert.ok(extractEmbedCandidates(page, 'https://site.example').includes('https://p.example/embed/9'));
-  assert.ok(!extractEmbedCandidates(page, 'https://site.example').some((u) => u.startsWith('javascript')));
+  assert.ok(
+    extractEmbedCandidates(page, 'https://site.example').every((candidate) => {
+      try {
+        return ['http:', 'https:'].includes(new URL(candidate).protocol);
+      } catch {
+        return false;
+      }
+    }),
+  );
 });
