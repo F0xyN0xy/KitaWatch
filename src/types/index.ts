@@ -76,6 +76,8 @@ export interface StreamSource {
   verified?: boolean;
   /** Why this source cannot be played in-app (e.g. provider forbids framing). */
   unsupportedReason?: string;
+  /** Subtitle tracks associated with this exact stream source. */
+  subtitles?: SubtitleTrack[];
 }
 
 export interface SubtitleTrack {
