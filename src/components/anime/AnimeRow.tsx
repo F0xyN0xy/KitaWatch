@@ -57,7 +57,7 @@ export default function AnimeRow({ title, items, loading, getProgress, getHref, 
           const p = getProgress?.(a);
           const progress = p == null ? undefined : Math.min(1, Math.max(0, p));
           return (
-            <div key={a.id} className="w-[150px] shrink-0 sm:w-[170px]">
+            <div key={a.id} className="relative w-[150px] shrink-0 sm:w-[170px]">
               <AnimeCard anime={a} index={i} href={getHref?.(a)} badge={getBadge?.(a)} onRemove={onRemove ? () => onRemove(a) : undefined} />
               {progress != null && progress > 0 && (
                 <div
