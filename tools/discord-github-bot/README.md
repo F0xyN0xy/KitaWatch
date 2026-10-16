@@ -7,9 +7,13 @@ Standalone Node.js service. It is intentionally separate from the Tauri desktop 
 - Watches one configured Discord forum channel.
 - New forum posts receive moderator-only Approve / Reject buttons.
 - Approval creates one GitHub issue and stores the Discord thread ↔ issue mapping in SQLite.
+- Discord forum tags named `Bug`, `Enhancement` (or `Feature Request`), and `Question` map to GitHub labels `bug`, `enhancement`, and `question` when creating an issue.
+- Newly created issues receive the `status: triage` label. Closing an issue replaces workflow-status labels with `status: resolved`; reopening replaces them with `status: triage`. Other labels, including type labels, are preserved.
 - Discord comments on approved threads are mirrored to GitHub; GitHub issue comments are mirrored to Discord.
 - GitHub issue close/reopen webhooks update the Discord thread status where configured.
 - Webhook signatures are verified and event delivery IDs are deduplicated.
+
+Create these GitHub labels in the repository before approving submissions: `bug`, `enhancement`, `question`, `status: triage`, `status: in-progress`, and `status: resolved`. The bot applies the type labels only when the matching Discord forum tag is applied to the post. The `status: in-progress` label is available for manual workflow tracking; the bot removes it when the issue is closed or reopened.
 
 ## Requirements
 
