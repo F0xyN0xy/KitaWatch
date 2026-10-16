@@ -149,7 +149,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     log(isForum ? "info" : "error", "discord.forum_check", { found: Boolean(channel), isForum, channelType: channel?.type ?? null, guildId: guild.id });
     if (!isForum) return;
     const permissions = channel.permissionsFor(readyClient.user);
-    const requiredPermissions = ["ViewChannel", "SendMessages", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
+    const requiredPermissions = ["ViewChannel", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
     const missingPermissions = requiredPermissions.filter((permission) => !permissions?.has(permission));
     log(missingPermissions.length ? "error" : "info", "discord.permission_check", { missingPermissions, requiredPermissions });
     if (moderatorRoles.size === 0) log("warn", "config.no_moderator_roles", { message: "No moderator role IDs configured; nobody can approve or reject submissions." });
@@ -332,7 +332,7 @@ app.get("/diagnostics", async (req, res) => {
     const guild = await client.guilds.fetch(env.DISCORD_GUILD_ID!);
     const channel = await guild.channels.fetch(env.DISCORD_FORUM_CHANNEL_ID!);
     const permissions = channel?.permissionsFor(client.user!);
-    const requiredPermissions = ["ViewChannel", "SendMessages", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
+    const requiredPermissions = ["ViewChannel", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
     const missing = requiredPermissions.filter((permission) => !permissions?.has(permission));
     checks.discordForum = { ok: channel?.type === 15 && missing.length === 0, detail: `isForum=${channel?.type === 15}; missingPermissions=${missing.join(",") || "none"}` };
   } catch (error) {
