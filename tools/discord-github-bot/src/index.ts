@@ -28,6 +28,17 @@ for (const key of required) {
 }
 
 const env = process.env;
+const startedAt = new Date().toISOString();
+function log(level: "info" | "warn" | "error", event: string, details: Record<string, unknown> = {}) {
+  const entry = { timestamp: new Date().toISOString(), level, event, ...details };
+  const line = JSON.stringify(entry);
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 const repo = env.GITHUB_REPOSITORY!;
 const [owner, repoName] = repo.split("/");
 if (!owner || !repoName || repo.split("/").length !== 2) {
@@ -44,6 +55,7 @@ const dbPath = path.resolve(env.DATABASE_PATH ?? "./data/feedback.sqlite");
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
+log("info", "database.opened", { databasePath: dbPath, nodeVersion: process.version });
 db.exec(`
   CREATE TABLE IF NOT EXISTS feedback_threads (
     thread_id TEXT PRIMARY KEY,
@@ -93,6 +105,7 @@ async function githubApi<T>(endpoint: string, init: RequestInit = {}): Promise<T
   });
   if (!response.ok) {
     const detail = await response.text();
+    log("error", "github.api_failed", { endpoint, status: response.status, detail: detail.slice(0, 300) });
     throw new Error(`GitHub API ${response.status}: ${detail.slice(0, 500)}`);
   }
   if (response.status === 204) return undefined as T;
@@ -114,36 +127,55 @@ async function applyTags(thread: ThreadChannel, tagIds: (string | undefined)[]) 
     const kept = existing.filter((id) => ![pendingTag, approvedTag, rejectedTag, resolvedTag].includes(id));
     await thread.setAppliedTags([...kept, ...ids].slice(0, 5));
   } catch (error) {
-    console.error("Could not update forum tags:", error);
+    log("error", "discord.tag_update_failed", { threadId: thread.id, error: errorMessage(error) });
   }
 }
 async function getThreadChannel(threadId: string): Promise<ThreadChannel | null> {
   try {
     const channel = await client.channels.fetch(threadId);
     return channel?.isThread() ? (channel as ThreadChannel) : null;
-  } catch {
+  } catch (error) {
+    log("error", "discord.thread_fetch_failed", { threadId, error: errorMessage(error) });
     return null;
   }
 }
 
-client.once(Events.ClientReady, (readyClient) => {
-  console.log(`Discord bot ready as ${readyClient.user.tag}`);
+client.once(Events.ClientReady, async (readyClient) => {
+  log("info", "discord.ready", { tag: readyClient.user.tag, userId: readyClient.user.id, guildId: env.DISCORD_GUILD_ID, forumChannelId: env.DISCORD_FORUM_CHANNEL_ID });
+  try {
+    const guild = await readyClient.guilds.fetch(env.DISCORD_GUILD_ID!);
+    const channel = await guild.channels.fetch(env.DISCORD_FORUM_CHANNEL_ID!);
+    const isForum = channel?.type === 15;
+    log(isForum ? "info" : "error", "discord.forum_check", { found: Boolean(channel), isForum, channelType: channel?.type ?? null, guildId: guild.id });
+    if (!isForum) return;
+    const permissions = channel.permissionsFor(readyClient.user);
+    const requiredPermissions = ["ViewChannel", "SendMessages", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
+    const missingPermissions = requiredPermissions.filter((permission) => !permissions?.has(permission));
+    log(missingPermissions.length ? "error" : "info", "discord.permission_check", { missingPermissions, requiredPermissions });
+    if (moderatorRoles.size === 0) log("warn", "config.no_moderator_roles", { message: "No moderator role IDs configured; nobody can approve or reject submissions." });
+  } catch (error) {
+    log("error", "startup.discord_check_failed", { error: errorMessage(error) });
+  }
 });
 
 client.on(Events.ThreadCreate, async (thread) => {
   if (thread.parentId !== env.DISCORD_FORUM_CHANNEL_ID || thread.guildId !== env.DISCORD_GUILD_ID) return;
+  log("info", "discord.forum_post_created", { threadId: thread.id, guildId: thread.guildId });
   addThread.run(thread.id, thread.guildId);
   await applyTags(thread, [pendingTag]);
   try {
     const starter = await thread.fetchStarterMessage();
-    if (!starter) return;
+    if (!starter) {
+      log("warn", "discord.starter_message_missing", { threadId: thread.id, hint: "Check View Channel, Read Message History, and Send Messages in Threads permissions." });
+      return;
+    }
     await starter.reply({
       content: "This submission is awaiting moderator review. Please keep discussion in this thread.",
       components: [approvalRow(thread.id)],
       allowedMentions: { parse: [] },
     });
   } catch (error) {
-    console.error("Could not add review controls to forum post:", error);
+    log("error", "discord.review_controls_failed", { threadId: thread.id, error: errorMessage(error) });
   }
 });
 
@@ -163,6 +195,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     isModerator = false;
   }
   if (!isModerator) {
+    log("warn", "discord.moderator_check_denied", { userId: interaction.user.id, guildId: interaction.guildId });
     await interaction.reply({ content: "Only configured moderators can review submissions.", ephemeral: true });
     return;
   }
@@ -178,6 +211,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  log("info", "approval.requested", { action, threadId, moderatorId: interaction.user.id });
   await interaction.deferReply({ ephemeral: true });
   const thread = await getThreadChannel(threadId);
   if (!thread) {
@@ -226,10 +260,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       content: `Approved by <@!${interaction.user.id}> — GitHub issue created: ${issue.html_url}`,
       allowedMentions: { users: [interaction.user.id] },
     });
+    log("info", "approval.issue_created", { threadId, issueNumber: issue.number, issueUrl: issue.html_url, moderatorId: interaction.user.id });
     await interaction.editReply(`Created [issue #${issue.number}](${issue.html_url}).`);
   } catch (error) {
     resetCreating.run(threadId);
-    console.error("Approval failed:", error);
+    log("error", "approval.failed", { threadId, action, error: errorMessage(error) });
     await interaction.editReply("Could not complete approval. Check the bot logs and GitHub before retrying, because a network timeout can leave the remote result uncertain.");
   }
 });
@@ -254,18 +289,80 @@ client.on(Events.MessageCreate, async (message: Message) => {
       method: "POST",
       body: JSON.stringify({ body }),
     });
+    log("info", "comment.discord_to_github", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id });
   } catch (error) {
-    console.error("Could not mirror Discord comment:", error);
+    log("error", "comment.discord_to_github_failed", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id, error: errorMessage(error) });
   }
 });
 
 const app = express();
-app.get("/health", (_req, res) => res.status(200).json({ ok: true }));
+app.get("/health", (_req, res) => res.status(200).json({
+  ok: true,
+  discordReady: client.isReady(),
+  uptimeSeconds: Math.round(process.uptime()),
+}));
+
+// Detailed diagnostics are disabled unless a secret is configured.
+app.get("/diagnostics", async (req, res) => {
+  const diagnosticsToken = env.DIAGNOSTICS_TOKEN;
+  if (!diagnosticsToken) return res.status(404).json({ error: "Not found" });
+  const provided = req.header("authorization")?.replace(/^Bearer\\s+/i, "") ?? "";
+  const a = Buffer.from(provided);
+  const b = Buffer.from(diagnosticsToken);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: "Unauthorized" });
+
+  const checks: Record<string, { ok: boolean; detail?: string }> = {};
+  try {
+    db.prepare("SELECT 1").get();
+    const probe = path.join(path.dirname(dbPath), `.kitawatch-write-test-${process.pid}`);
+    fs.writeFileSync(probe, "ok", { flag: "wx" });
+    fs.unlinkSync(probe);
+    checks.database = { ok: true, detail: "SQLite query and directory write succeeded" };
+  } catch (error) {
+    checks.database = { ok: false, detail: errorMessage(error) };
+  }
+  checks.discord = { ok: client.isReady(), detail: client.isReady() ? "Gateway connected" : "Gateway not ready" };
+  try {
+    const githubRepo = await githubApi<{ full_name: string; permissions?: { issues?: boolean; push?: boolean } }>("");
+    checks.github = { ok: githubRepo.full_name.toLowerCase() === repo.toLowerCase(), detail: `Repository reachable: ${githubRepo.full_name}; permissions: ${JSON.stringify(githubRepo.permissions ?? {})}` };
+  } catch (error) {
+    checks.github = { ok: false, detail: errorMessage(error) };
+  }
+  try {
+    const guild = await client.guilds.fetch(env.DISCORD_GUILD_ID!);
+    const channel = await guild.channels.fetch(env.DISCORD_FORUM_CHANNEL_ID!);
+    const permissions = channel?.permissionsFor(client.user!);
+    const requiredPermissions = ["ViewChannel", "SendMessages", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
+    const missing = requiredPermissions.filter((permission) => !permissions?.has(permission));
+    checks.discordForum = { ok: channel?.type === 15 && missing.length === 0, detail: `isForum=${channel?.type === 15}; missingPermissions=${missing.join(",") || "none"}` };
+  } catch (error) {
+    checks.discordForum = { ok: false, detail: errorMessage(error) };
+  }
+  const ok = Object.values(checks).every((check) => check.ok);
+  log(ok ? "info" : "warn", "diagnostics.requested", { checks });
+  res.status(ok ? 200 : 503).json({
+    ok,
+    startedAt,
+    nodeVersion: process.version,
+    platform: process.platform,
+    configured: {
+      discordToken: Boolean(env.DISCORD_TOKEN),
+      discordGuildId: Boolean(env.DISCORD_GUILD_ID),
+      discordForumChannelId: Boolean(env.DISCORD_FORUM_CHANNEL_ID),
+      moderatorRoleCount: moderatorRoles.size,
+      githubToken: Boolean(env.GITHUB_TOKEN),
+      githubWebhookSecret: Boolean(env.GITHUB_WEBHOOK_SECRET),
+      databasePathConfigured: Boolean(env.DATABASE_PATH),
+    },
+    checks,
+  });
+});
 app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
   const signature = req.header("x-hub-signature-256");
   const deliveryId = req.header("x-github-delivery");
   const event = req.header("x-github-event");
   if (!signature || !deliveryId || !event || !Buffer.isBuffer(req.body)) {
+    log("warn", "webhook.invalid_request", { hasSignature: Boolean(signature), hasDeliveryId: Boolean(deliveryId), event: event ?? null, bodyIsBuffer: Buffer.isBuffer(req.body) });
     res.status(400).send("Missing webhook headers or raw body");
     return;
   }
@@ -273,10 +370,12 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
   const providedBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
   if (providedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
+    log("warn", "webhook.invalid_signature", { deliveryId, event });
     res.status(401).send("Invalid signature");
     return;
   }
   if (seenDelivery.get(deliveryId)) {
+    log("info", "webhook.duplicate", { deliveryId, event });
     res.status(200).send("Duplicate delivery ignored");
     return;
   }
@@ -288,6 +387,7 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
     return;
   }
   saveDelivery.run(deliveryId);
+  log("info", "webhook.accepted", { deliveryId, event, action: payload.action ?? null, issueNumber: payload.issue?.number ?? null });
   res.status(202).send("Accepted");
 
   try {
@@ -303,6 +403,7 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
         content: `**GitHub — ${comment.user?.login ?? "user"}**\n\n${String(comment.body).slice(0, 1800)}\n\n[View GitHub comment](${comment.html_url})\n<!-- kitawatch-bridge:github -->`,
         allowedMentions: { parse: [] },
       });
+      log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
     } else if (event === "issues" && ["closed", "reopened"].includes(payload.action)) {
       const issueNumber = payload.issue?.number as number | undefined;
       if (!issueNumber) return;
@@ -322,10 +423,23 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
       }
     }
   } catch (error) {
-    console.error("Webhook processing failed:", error);
+    log("error", "webhook.processing_failed", { deliveryId, event, action: payload.action ?? null, error: errorMessage(error) });
   }
 });
 
 const port = Number(env.PORT ?? 3000);
-app.listen(port, "0.0.0.0", () => console.log(`Webhook server listening on port ${port}`));
-await client.login(env.DISCORD_TOKEN);
+app.listen(port, "0.0.0.0", () => log("info", "http.listening", { port, healthPath: "/health", webhookPath: "/webhooks/github", diagnosticsEnabled: Boolean(env.DIAGNOSTICS_TOKEN) }));
+client.on(Events.Error, (error) => log("error", "discord.client_error", { error: errorMessage(error) }));
+process.on("unhandledRejection", (reason) => log("error", "process.unhandled_rejection", { error: errorMessage(reason) }));
+process.on("uncaughtException", (error) => {
+  log("error", "process.uncaught_exception", { error: errorMessage(error) });
+  process.exitCode = 1;
+});
+log("info", "startup.begin", { nodeVersion: process.version, platform: process.platform, databasePath: dbPath, repository: repo });
+try {
+  await client.login(env.DISCORD_TOKEN);
+} catch (error) {
+  log("error", "startup.discord_login_failed", { error: errorMessage(error) });
+  process.exitCode = 1;
+  throw error;
+}
