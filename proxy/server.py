@@ -1,3 +1,4 @@
+import re
 from urllib.parse import quote, urlencode, urljoin, urlparse
 
 from curl_cffi.requests import AsyncSession
@@ -182,12 +183,34 @@ def _rewrite_playlist(text: str, playlist_url: str, referer: str | None) -> str:
     through our own query string instead of being parsed as our params.
     """
 
+    def proxy_url(resource: str) -> str:
+        target = urljoin(playlist_url, resource)
+        return (
+            f"/proxy_segment?url={quote(target, safe=':/')}"
+            f"&referer={quote(referer or '', safe=':/')}"
+        )
+
     def fix(line: str) -> str:
         line = line.strip()
-        if not line or line.startswith("#"):
+        if not line:
             return line
-        seg = urljoin(playlist_url, line)
-        return f"/proxy_segment?url={quote(seg, safe=':/')}&referer={quote(referer or '', safe=':/')}"
+
+        if line.startswith("#"):
+            # HLS stores some resources inside tag attributes rather than on
+            # their own lines. In particular, EXT-X-KEY (decryption keys),
+            # EXT-X-MEDIA (alternate audio playlists), and EXT-X-MAP can use
+            # relative URIs. If these are left untouched, the browser resolves
+            # them against localhost:8001 and hits nonexistent /keys or /audio
+            # routes instead of going through the upstream proxy.
+            def rewrite_uri(match: re.Match[str]) -> str:
+                resource = match.group(1)
+                if resource.lower().startswith("data:"):
+                    return match.group(0)
+                return f'URI="{proxy_url(resource)}"'
+
+            return re.sub(r'URI="([^"]+)"', rewrite_uri, line)
+
+        return proxy_url(line)
 
     return "\n".join(fix(l) for l in text.splitlines())
 
