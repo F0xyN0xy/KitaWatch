@@ -55,14 +55,22 @@ export default function AnimeRow({ title, items, loading, getProgress, getHref, 
           ))}
         {!loading && items?.map((a, i) => {
           const p = getProgress?.(a);
+          const progress = p == null ? undefined : Math.min(1, Math.max(0, p));
           return (
-            <div key={a.id} className="relative w-[150px] shrink-0 sm:w-[170px]">
+            <div key={a.id} className="w-[150px] shrink-0 sm:w-[170px]">
               <AnimeCard anime={a} index={i} href={getHref?.(a)} badge={getBadge?.(a)} onRemove={onRemove ? () => onRemove(a) : undefined} />
-              {p != null && p > 0 && (
-                <div className="pointer-events-none absolute bottom-1.5 left-2 right-2 h-1 overflow-hidden rounded-full bg-white/20">
+              {progress != null && progress > 0 && (
+                <div
+                  role="progressbar"
+                  aria-label={`Watch progress for ${a.title}`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(progress * 100)}
+                  className="mt-2 h-1 overflow-hidden rounded-full bg-white/20"
+                >
                   <div
                     className="h-full rounded-full bg-accent-500"
-                    style={{ width: `${Math.min(100, p * 100)}%` }}
+                    style={{ width: `${progress * 100}%` }}
                   />
                 </div>
               )}

@@ -67,7 +67,7 @@ function AnimeCard({ anime, index = 0, href, badge, onRemove }: Props) {
             {(anime.dubCount ?? 0) > 0 && <Badge variant="dub">Dub</Badge>}
           </div>
         </div>
-        <p className="mt-2 line-clamp-2 text-sm font-medium text-zinc-300 transition group-hover:text-white">
+        <p className="mt-2 min-h-[2.5rem] line-clamp-2 text-sm font-medium text-zinc-300 transition group-hover:text-white">
           {anime.title}
         </p>
       </Link>
