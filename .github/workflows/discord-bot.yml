@@ -1,0 +1,32 @@
+name: Discord GitHub Bot CI
+
+on:
+  push:
+    branches: [main, "feat/discord-github-feedback-bot"]
+    paths:
+      - "tools/discord-github-bot/**"
+      - ".github/workflows/discord-bot.yml"
+  pull_request:
+    paths:
+      - "tools/discord-github-bot/**"
+      - ".github/workflows/discord-bot.yml"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/discord-github-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run build
