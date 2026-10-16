@@ -8,6 +8,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelType,
   Client,
   Events,
   GatewayIntentBits,
@@ -140,6 +141,54 @@ async function getThreadChannel(threadId: string): Promise<ThreadChannel | null>
   }
 }
 
+const githubTypeLabelByForumTag = new Map<string, string>([
+  ["bug", "bug"],
+  ["enhancement", "enhancement"],
+  ["feature request", "enhancement"],
+  ["question", "question"],
+]);
+const githubStatusLabels = new Set(["status: triage", "status: in-progress", "status: resolved"]);
+
+async function getGitHubTypeLabels(thread: ThreadChannel): Promise<string[]> {
+  try {
+    const forum = await client.channels.fetch(env.DISCORD_FORUM_CHANNEL_ID!);
+    if (!forum || forum.type !== ChannelType.GuildForum) return [];
+
+    const appliedTagIds = new Set(thread.appliedTags);
+    const labels = forum.availableTags
+      .filter((tag) => appliedTagIds.has(tag.id))
+      .map((tag) => githubTypeLabelByForumTag.get(tag.name.trim().toLowerCase()))
+      .filter((label): label is string => Boolean(label));
+    return [...new Set(labels)];
+  } catch (error) {
+    log("warn", "github.issue_type_labels_unavailable", {
+      threadId: thread.id,
+      error: errorMessage(error),
+    });
+    return [];
+  }
+}
+
+async function syncGitHubStatusLabel(
+  issueNumber: number,
+  statusLabel: "status: triage" | "status: resolved",
+): Promise<void> {
+  const issue = await githubApi<{ labels: Array<{ name: string }> }>("/issues/" + issueNumber);
+  const labels = (issue.labels ?? [])
+    .map((label) => label.name)
+    .filter((name) => !githubStatusLabels.has(name.toLowerCase()));
+
+  if (!labels.some((name) => name.toLowerCase() === statusLabel)) {
+    labels.push(statusLabel);
+  }
+
+  await githubApi("/issues/" + issueNumber, {
+    method: "PATCH",
+    body: JSON.stringify({ labels }),
+  });
+  log("info", "github.issue_status_label_synced", { issueNumber, statusLabel });
+}
+
 client.once(Events.ClientReady, async (readyClient) => {
   log("info", "discord.ready", { tag: readyClient.user.tag, userId: readyClient.user.id, guildId: env.DISCORD_GUILD_ID, forumChannelId: env.DISCORD_FORUM_CHANNEL_ID });
   try {
@@ -249,9 +298,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       "",
       "<!-- kitawatch-bridge:issue -->",
     ].join("\n");
+    const typeLabels = await getGitHubTypeLabels(thread);
+    const issueLabels = [...new Set([...typeLabels, "status: triage"])];
     const issue = await githubApi<{ number: number; html_url: string }>("/issues", {
       method: "POST",
-      body: JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body, labels: issueLabels }),
     });
     const changed = setIssue.run(issue.number, threadId);
     if (changed.changes === 0) throw new Error("This submission was linked by another action; check GitHub before retrying.");
@@ -412,10 +463,28 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
       const thread = await getThreadChannel(linked.thread_id);
       if (!thread) return;
       if (payload.action === "closed") {
+        try {
+          await syncGitHubStatusLabel(issueNumber, "status: resolved");
+        } catch (error) {
+          log("error", "github.issue_status_label_sync_failed", {
+            issueNumber,
+            statusLabel: "status: resolved",
+            error: errorMessage(error),
+          });
+        }
         setState.run("closed", linked.thread_id);
         await applyTags(thread, [resolvedTag]);
         await thread.setArchived(true, "Linked GitHub issue was closed");
       } else {
+        try {
+          await syncGitHubStatusLabel(issueNumber, "status: triage");
+        } catch (error) {
+          log("error", "github.issue_status_label_sync_failed", {
+            issueNumber,
+            statusLabel: "status: triage",
+            error: errorMessage(error),
+          });
+        }
         setState.run("approved", linked.thread_id);
         await thread.setArchived(false, "Linked GitHub issue was reopened");
         await applyTags(thread, [approvedTag]);
