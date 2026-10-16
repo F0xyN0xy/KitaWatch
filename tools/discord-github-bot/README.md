@@ -16,6 +16,9 @@ Standalone Node.js service. It is intentionally separate from the Tauri desktop 
 - Node.js 20+
 - A Discord bot invited to the server with View Channels, Send Messages, Read Message History, Manage Threads (for status/archive actions), and Use Application Commands if slash commands are added later.
 - Enable the **Message Content Intent** in the Discord Developer Portal.
+- Create a **Forum Channel** in a Community-enabled Discord server (not a regular text channel). Create optional forum tags such as `Pending`, `Approved`, `Rejected`, and `Resolved`, then copy their IDs into the matching environment variables.
+- Give the bot role these channel permissions on that forum and its threads: **View Channel**, **Send Messages**, **Send Messages in Threads**, **Read Message History**, and **Manage Threads**. Manage Threads is needed to change tags and archive/unarchive posts. Avoid granting Administrator.
+- Create a dedicated moderator role and put its role ID in `DISCORD_MODERATOR_ROLE_IDS` (comma-separated for multiple roles). Members with this role can approve/reject; ordinary members cannot.
 - A GitHub fine-grained personal access token restricted to `F0xyN0xy/KitaWatch`, with Issues read/write.
 - A publicly reachable HTTPS endpoint for GitHub webhooks.
 - Persistent storage for the SQLite database. Do not use an ephemeral directory: losing the database loses the mapping and deduplication state.
