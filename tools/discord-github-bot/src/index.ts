@@ -66,6 +66,8 @@ const setIssue = db.prepare(
   "UPDATE feedback_threads SET issue_number = ?, state = 'approved' WHERE thread_id = ? AND issue_number IS NULL",
 );
 const setState = db.prepare("UPDATE feedback_threads SET state = ? WHERE thread_id = ?");
+const claimPending = db.prepare("UPDATE feedback_threads SET state = 'creating' WHERE thread_id = ? AND state = 'pending'");
+const resetCreating = db.prepare("UPDATE feedback_threads SET state = 'pending' WHERE thread_id = ? AND state = 'creating'");
 const seenDelivery = db.prepare("SELECT delivery_id FROM webhook_deliveries WHERE delivery_id = ?");
 const saveDelivery = db.prepare("INSERT OR IGNORE INTO webhook_deliveries (delivery_id) VALUES (?)");
 
@@ -153,11 +155,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await interaction.reply({ content: "This action is not available here.", ephemeral: true });
     return;
   }
-  const member = interaction.member;
-  const roles = member && "roles" in member
-    ? ("cache" in member.roles ? member.roles.cache : null)
-    : null;
-  const isModerator = Boolean(roles && [...moderatorRoles].some((id) => roles.has(id)));
+  let isModerator = false;
+  try {
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    isModerator = [...moderatorRoles].some((id) => member.roles.cache.has(id));
+  } catch {
+    isModerator = false;
+  }
   if (!isModerator) {
     await interaction.reply({ content: "Only configured moderators can review submissions.", ephemeral: true });
     return;
@@ -178,6 +182,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const thread = await getThreadChannel(threadId);
   if (!thread) {
     await interaction.editReply("The forum thread could not be found.");
+    return;
+  }
+
+  const claimed = claimPending.run(threadId);
+  if (claimed.changes === 0) {
+    await interaction.editReply("Another moderator action has already started for this submission. Refresh the thread before trying again.");
     return;
   }
 
@@ -218,8 +228,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
     await interaction.editReply(`Created [issue #${issue.number}](${issue.html_url}).`);
   } catch (error) {
+    resetCreating.run(threadId);
     console.error("Approval failed:", error);
-    await interaction.editReply("Could not create the issue. The bot logged the error; check GitHub before retrying to avoid duplicates.");
+    await interaction.editReply("Could not complete approval. Check the bot logs and GitHub before retrying, because a network timeout can leave the remote result uncertain.");
   }
 });
 
