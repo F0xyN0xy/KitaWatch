@@ -55,12 +55,16 @@ function titleContext(animeId: number | string, title: string | undefined) {
 /** Order streams by the user's provider preference list (prefix match on
  *  "server" so e.g. "anikage:koto" follows "anikage"). */
 function prioritize(streams: StreamSource[]): StreamSource[] {
-  const order = useSettingsStore.getState().providerPriority.map((p) => p.toLowerCase());
+  const settings = useSettingsStore.getState();
+  const order = settings.providerPriority.map((p) => p.toLowerCase());
 
   const rank = (s: StreamSource) => {
     if (s.verified === false) return 999; // probed dead — sink to the bottom
 
     const server = (s.server ?? '').toLowerCase();
+    const preferred = (s.audio === 'dub' ? settings.preferredDubProvider : settings.preferredSubProvider).toLowerCase();
+    const provider = server.startsWith('anivexa:') ? server.slice('anivexa:'.length) : server;
+    const matchesPreferred = Boolean(preferred) && (provider === preferred || provider.startsWith(`${preferred}:`));
     // Anivexa labels its streams "anivexa:<provider>", while the settings
     // list stores the provider name by itself (e.g. "anizone"). Compare
     // both the complete tag and the nested provider name.
@@ -68,7 +72,9 @@ function prioritize(streams: StreamSource[]): StreamSource[] {
       ? [server, server.slice('anivexa:'.length), 'anivexa']
       : [server];
 
-    let best = 99;
+    // A saved preference outranks the normal provider order, but never a
+    // source explicitly marked dead. The resolver still keeps fallbacks.
+    let best = matchesPreferred ? -1 : 99;
     for (const candidate of candidates) {
       const i = order.findIndex(
         (entry) => candidate === entry || candidate.startsWith(`${entry}:`),
