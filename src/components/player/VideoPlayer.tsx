@@ -142,8 +142,29 @@ function EmbedPlayer({ source, onFatal }: Pick<Props, 'source' | 'onFatal'>) {
           allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
           referrerPolicy="strict-origin-when-cross-origin"
           sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox"
-          onLoad={() => setLoaded(true)}
-          onError={onFatal}
+          onLoad={(event) => {
+            setLoaded(true);
+            const frame = event.currentTarget;
+            console.info('[KitaWatch iframe debug] load event', {
+              src: frame.src,
+              host,
+              sandbox: frame.getAttribute('sandbox'),
+              allow: frame.getAttribute('allow'),
+              referrerPolicy: frame.referrerPolicy,
+              loadedAt: new Date().toISOString(),
+            });
+          }}
+          onError={(event) => {
+            console.error('[KitaWatch iframe debug] iframe error event', {
+              src: event.currentTarget.src,
+              host,
+              sandbox: event.currentTarget.getAttribute('sandbox'),
+              allow: event.currentTarget.getAttribute('allow'),
+              referrerPolicy: event.currentTarget.referrerPolicy,
+              failedAt: new Date().toISOString(),
+            });
+            onFatal();
+          }}
         />
       </div>
       {/* The browser fires `load` even when it replaced the page with a
@@ -168,6 +189,21 @@ function EmbedPlayer({ source, onFatal }: Pick<Props, 'source' | 'onFatal'>) {
           </button>
         </span>
       </div>
+      <details className="border-t border-white/5 px-3 py-2 text-xs text-zinc-400">
+        <summary className="cursor-pointer select-none">Iframe debug info</summary>
+        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 break-all">
+          <dt>Host</dt><dd>{host}</dd>
+          <dt>URL</dt><dd>{source.url}</dd>
+          <dt>Sandbox</dt><dd>{frameRef.current?.getAttribute('sandbox') ?? '(not set)'}</dd>
+          <dt>Allow</dt><dd>{frameRef.current?.getAttribute('allow') ?? '(not set)'}</dd>
+          <dt>Referrer policy</dt><dd>{frameRef.current?.referrerPolicy ?? '(not set)'}</dd>
+          <dt>Iframe load event</dt><dd>{loaded ? 'Fired (does not guarantee playback)' : 'Not fired yet'}</dd>
+        </dl>
+        <p className="mt-2 text-zinc-500">
+          Details and errors from inside a cross-origin embed are hidden by the browser.
+          Check DevTools Console and Network for the provider&apos;s own errors.
+        </p>
+      </details>
     </div>
   );
 }
