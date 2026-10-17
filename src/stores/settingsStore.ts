@@ -57,6 +57,9 @@ interface SettingsState {
   defaultQuality: Quality;
   autoplayNext: boolean;
   providerPriority: string[];
+  /** Preferred source provider for each audio mode; empty means automatic. */
+  preferredSubProvider: string;
+  preferredDubProvider: string;
   consumetBaseUrl: string;
   enableConsumetFallback: boolean;
   /** Local proxy sidecar (CORS + referer + m3u8 rewrite). */
@@ -93,6 +96,8 @@ interface SettingsState {
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
   setProviderPriority: (order: string[]) => void;
+  setPreferredSubProvider: (provider: string) => void;
+  setPreferredDubProvider: (provider: string) => void;
   setConsumetBaseUrl: (url: string) => void;
   setEnableConsumetFallback: (v: boolean) => void;
   setProxyBaseUrl: (url: string) => void;
@@ -112,6 +117,8 @@ export const useSettingsStore = create<SettingsState>()(
       defaultQuality: 'auto',
       autoplayNext: true,
       providerPriority: [...PROVIDER_PRIORITY],
+      preferredSubProvider: '',
+      preferredDubProvider: '',
       // Consumet is user-self-hostable (docker) and NOT bundled with the app,
       // so the fallback is opt-in — enabling it without a local instance
       // just adds a guaranteed connection-refused to every episode.
@@ -136,6 +143,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
       setProviderPriority: (providerPriority) => set({ providerPriority }),
+      setPreferredSubProvider: (preferredSubProvider) => set({ preferredSubProvider }),
+      setPreferredDubProvider: (preferredDubProvider) => set({ preferredDubProvider }),
       setConsumetBaseUrl: (consumetBaseUrl) => set({ consumetBaseUrl }),
       setEnableConsumetFallback: (enableConsumetFallback) =>
         set({ enableConsumetFallback }),
@@ -152,7 +161,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
