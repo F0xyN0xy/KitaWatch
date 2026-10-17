@@ -41,7 +41,7 @@ test('4. webpage supplied as mp4 is not trusted as a file', () => {
 
 test('4b. extensionless declared mp4 (token / loopback torrent URLs) stays playable, but probing decides', () => {
   assert.equal(classifySourceKind('mp4', 'http://127.0.0.1:8080/stream/0'), 'mp4');
-  // an HTML 200 is NOT proof of video
+  // An HTML 200 is NOT proof of video.
   assert.equal(mediaResponseVerdict('mp4', 200, 'text/html; charset=utf-8'), false);
   assert.equal(mediaResponseVerdict('mp4', 200, 'video/mp4'), true);
   assert.equal(mediaResponseVerdict('mp4', 200, 'application/octet-stream'), true);
@@ -72,14 +72,19 @@ test('6/7. switching kinds dispatches to the right player component', () => {
   assert.deepEqual(seq.map(isDirectMedia), [false, true, true]);
 });
 
-test('9. a 404 page is not media; an embed status proves nothing', () => {
+test('9. failed MP4 proxy probes are inconclusive; failed HLS probes indicate playback failure', () => {
+  // Direct MP4 playback bypasses the proxy, so proxy errors must not bury it.
+  assert.equal(mediaResponseVerdict('mp4', 403, 'text/html'), undefined);
+  assert.equal(mediaResponseVerdict('mp4', 404, 'text/html'), undefined);
+  assert.equal(mediaResponseVerdict('mp4', 502, 'text/html'), undefined);
+  assert.equal(mediaResponseVerdict('mp4', 405, null), undefined);
+  // An HTML 200 is affirmative evidence that the URL is a webpage, not media.
+  assert.equal(mediaResponseVerdict('mp4', 200, 'text/html'), false);
   assert.equal(mediaResponseVerdict('hls', 404, null, ''), false);
-  assert.equal(mediaResponseVerdict('mp4', 404, 'text/html'), false);
   assert.equal(mediaResponseVerdict('hls', 200, 'text/html', '<html>player</html>'), false);
   assert.equal(mediaResponseVerdict('hls', 200, 'application/vnd.apple.mpegurl', '#EXTM3U\n#EXT-X-VERSION:3'), true);
   assert.equal(mediaResponseVerdict('embed', 200, 'text/html'), undefined);
   assert.equal(mediaResponseVerdict('unknown', 200, 'text/html'), false);
-  assert.equal(mediaResponseVerdict('mp4', 405, null), undefined);
 });
 
 test('11. frame policy: X-Frame-Options / CSP frame-ancestors are detected, not bypassed', () => {
