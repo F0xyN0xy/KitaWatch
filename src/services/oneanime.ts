@@ -1,5 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
+import { classifySourceKind } from './sourceType';
 
 /**
  * 1anime.app aggregator API (captured from their frontend):
@@ -83,9 +84,19 @@ function mapEnvelope(env: StreamEnvelope, provider: string, audio: AudioType): O
   for (const s of raw) {
     const u = s.url ?? s.link ?? s.file;
     if (!u) continue;
+
+    // Don't assume every non-HLS URL is an MP4. Some provider responses
+    // contain webpage/embed URLs; only keep sources whose type is declared
+    // or can be inferred from the URL, and let VideoPlayer handle embeds.
+    const type = classifySourceKind(s.isM3U8 ? 'hls' : s.type, u);
+    if (type === 'unknown') {
+      console.warn(`[1anime] ${provider}: dropped source with unknown media type`, u);
+      continue;
+    }
+
     const referer = s.headers?.Referer ?? s.headers?.referer;
     streams.push({
-      type: s.isM3U8 || u.includes('.m3u8') || s.type === 'hls' ? 'hls' : 'mp4',
+      type,
       url: u,
       server: `1anime:${s.server ?? provider}`,
       audio,
