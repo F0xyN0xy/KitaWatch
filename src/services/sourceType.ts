@@ -5,7 +5,7 @@
  * Rules:
  *  - 'embed' is NEVER inferred from a URL. A provider must declare it, and
  *    even then it is only a claim that the page is meant to be framed.
- *  - 'hls' / 'mp4' are inferred from the URL *pathname* (query strings and
+ *  - 'hls' / 'mp4' are inferred from the URL pathname (query strings and
  *    fragments never count), or taken from an explicit declaration that is
  *    not contradicted by the URL.
  *  - Anything else is 'unknown': a webpage whose media type is not
@@ -84,44 +84,15 @@ export function subtitleFormat(raw: string): 'ass' | 'srt' | 'vtt' {
 }
 
 /**
- * Can this response be framed by another origin? Derived ONLY from the
- * response headers the provider itself sent. This is detection, not a
- * workaround: a page that forbids framing is reported unsupported.
- *
- * Limits (cannot be fixed client-side): JS frame-busting, cookie/sandbox
- * behaviour and per-embedder allow-lists are invisible here, and the browser
- * fires `load` on the iframe even when it blocked the page.
- */
-export function frameEmbedPolicy(
-  headers: { get(name: string): string | null },
-): { embeddable: boolean; reason?: string } {
-  const xfo = headers.get('x-frame-options')?.trim().toLowerCase();
-  if (xfo) {
-    // DENY / SAMEORIGIN block every cross-origin embedder (the app is never
-    // same-origin with a provider); ALLOW-FROM is obsolete and ignored by
-    // current browsers, so it cannot be relied on.
-    return { embeddable: false, reason: `X-Frame-Options: ${xfo}` };
-  }
-  const csp = headers.get('content-security-policy');
-  if (csp) {
-    const directive = csp
-      .split(';')
-      .map((d) => d.trim())
-      .find((d) => d.toLowerCase().startsWith('frame-ancestors'));
-    if (directive) {
-      const sources = directive.split(/\s+/).slice(1).map((s) => s.toLowerCase());
-      const open = sources.some((s) => s === '*' || s === 'https:' || s === 'tauri:');
-      if (!open) return { embeddable: false, reason: `CSP ${directive}` };
-    }
-  }
-  return { embeddable: true };
-}
-
-/**
  * Verdict on a probe response for a source of the given kind.
  *  true      -> evidence that media is really there
- *  false     -> evidence it is not (error status, an HTML page, no manifest)
+ *  false     -> evidence it is not (an HTML page, or a failed HLS proxy request)
  *  undefined -> inconclusive (leave the source unverified, don't bury it)
+ *
+ * MP4 playback uses the browser's direct <video> path, but probes use the
+ * CORS proxy. A proxy-side 403/404/5xx therefore does not prove the direct
+ * media URL is dead; only a successful response with an HTML/JSON/text body
+ * can positively identify a non-video page.
  *
  * HTTP 200 alone is never proof: a webpage returns 200 too.
  */
@@ -134,10 +105,14 @@ export function mediaResponseVerdict(
   if (kind === 'embed') return undefined; // a frame's status says nothing about playback
   if (kind === 'unknown') return false;
   if (status === 405 || status === 501) return undefined;
+  // MP4 is played directly, while the probe is sent through a proxy. An HTTP
+  // failure from that proxy is inconclusive, unlike an HLS failure (which uses
+  // the same proxy pipeline as playback).
+  if (kind === 'mp4' && (status < 200 || status >= 300)) return undefined;
   if (status < 200 || status >= 300) return false;
   const ct = (contentType ?? '').toLowerCase();
   if (kind === 'hls') return typeof body === 'string' && body.includes('#EXTM3U');
-  // mp4: an HTML/JSON/text body means a webpage or error page, not video
+  // mp4: an HTML/JSON/text body means a webpage or error page, not a video
   if (ct.startsWith('text/') || ct.includes('html') || ct.includes('json')) return false;
   return true;
 }
