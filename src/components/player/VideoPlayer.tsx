@@ -461,7 +461,7 @@ function MediaPlayer({
         const duration = player.duration;
         if (
           !progressCommitted &&
-          !player.seeking &&
+          !player.video.seeking &&
           Number.isFinite(duration) &&
           duration > 0 &&
           player.currentTime / duration >= 0.8
