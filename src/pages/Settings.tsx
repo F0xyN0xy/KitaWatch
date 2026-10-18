@@ -65,6 +65,8 @@ export default function Settings() {
     setShowAdultContent,
     updateAdultProgress,
     setUpdateAdultProgress,
+    autoTrackKitaWatch,
+    setAutoTrackKitaWatch,
     adultProvidersUnavailable,
     setAdultProvidersUnavailable,
   } = useSettingsStore();
@@ -247,6 +249,19 @@ export default function Settings() {
             </p>
           </div>
           <Toggle on={updateAdultProgress} onChange={setUpdateAdultProgress} />
+        </div>
+      </Section>
+
+      <Section title="Tracking">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Track playback in the KitaWatch list</p>
+            <p className="text-xs text-zinc-600">
+              Automatically add anime when a playable source is available. This list is stored
+              only on this device and does not create or change AniList entries.
+            </p>
+          </div>
+          <Toggle on={autoTrackKitaWatch} onChange={setAutoTrackKitaWatch} />
         </div>
       </Section>
 
