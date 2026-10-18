@@ -129,6 +129,14 @@ export default function Sidebar() {
           >
             kitawatch.free.nf
           </a>
+          <a
+            href="https://discord.gg/RpWcRSUhUe"
+            target="_blank"
+            rel="noreferrer"
+            className="text-zinc-500 hover:text-zinc-300"
+          >
+            Discord
+          </a>
         </div>
         <Disclaimer />
         <p className="text-[10px] uppercase tracking-widest text-zinc-700">
