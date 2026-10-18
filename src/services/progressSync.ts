@@ -15,6 +15,7 @@
 //  - Failures are swallowed with a console warning — sync must never break playback.
 
 import { saveListEntry } from './anilistSync';
+import { statusForProgressUpdate } from './anilistStatus';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -107,21 +108,21 @@ export function pushProgress(mediaId: number, episode: number, isAdult?: boolean
       if (lastPushed !== undefined && episode <= lastPushed) return;
 
       const remote = await fetchRemoteProgress(accessToken, mediaId, viewer.id);
+      const nextStatus = statusForProgressUpdate(remote?.status);
+
       if (remote && episode <= remote.progress) {
         // The user may already be further along on AniList or another device.
-        // Remember the higher value locally and do not send a regression.
+        // Do not regress progress, but still transition Planned to Watching.
+        if (nextStatus) {
+          await saveListEntry(accessToken, mediaId, nextStatus, remote.progress);
+        }
         pushed.set(mediaId, remote.progress);
         return;
       }
 
-      // Preserve an existing status (e.g. COMPLETED or PAUSED). Only new
-      // entries need CURRENT so first-time watchers are added to their list.
-      await saveListEntry(
-        accessToken,
-        mediaId,
-        remote ? undefined : 'CURRENT',
-        episode,
-      );
+      // Updating by mediaId edits the existing AniList entry. Planned becomes
+      // CURRENT; other existing statuses are preserved by omitting status.
+      await saveListEntry(accessToken, mediaId, nextStatus, episode);
       pushed.set(mediaId, episode);
     })
     .catch((error: unknown) => {
