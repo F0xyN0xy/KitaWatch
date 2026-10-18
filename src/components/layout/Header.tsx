@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Clock, Search, UserRound, X, Bell, Tv, RefreshCw } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
@@ -12,6 +12,7 @@ import type { AnimeSummary } from '@/types';
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [value, setValue] = useState(searchParams.get('q') ?? '');
   const debounced = useDebounce(value, 200);
@@ -56,18 +57,21 @@ export default function Header() {
     };
   }, [debounced]);
 
-  // Live search — ONLY for edits made in this input
+  // External navigation (including entering/leaving Watch): disarm pending
+  // input-driven navigation before the live-search effect can run.
   useEffect(() => {
-    if (!dirty.current) return;
+    dirty.current = false;
+  }, [location.pathname, searchParams]);
+
+  // Live search — ONLY for edits made in this input. While watching, keep
+  // typing local to the header so it never interrupts the current episode;
+  // Enter or choosing an autocomplete result still performs explicit navigation.
+  useEffect(() => {
+    if (!dirty.current || location.pathname.startsWith('/watch/')) return;
     const q = debounced.trim();
     if (q.length >= 2) navigate(`/browse?q=${encodeURIComponent(q)}`);
     else if (q.length === 0) navigate('/browse');
-  }, [debounced, navigate]);
-
-  // External navigation (Settings click etc.): disarm the pending search
-  useEffect(() => {
-    dirty.current = false;
-  }, [searchParams]);
+  }, [debounced, navigate, location.pathname]);
 
   // Close on outside click
   useEffect(() => {
@@ -152,7 +156,7 @@ export default function Header() {
             onClick={() => {
               setValue('');
               dirty.current = false;
-              navigate('/browse');
+              if (!location.pathname.startsWith('/watch/')) navigate('/browse');
             }}
             aria-label="Clear search"
             className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-zinc-500 hover:text-zinc-200"
