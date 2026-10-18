@@ -508,8 +508,11 @@ function MediaPlayer({
   // asynchronously and a ref read here would usually still be null.
   // No data (AniSkip 404) simply means no buttons.
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !art || !skips) return;
+    // The player itself is the fullscreen element. Appending overlays to the
+    // outer React container leaves them outside the fullscreen subtree, so
+    // attach skip buttons to ArtPlayer's own root instead.
+    const playerElement = art?.template.$player;
+    if (!playerElement || !skips) return;
     const specs = [
       { interval: skips.op, label: 'Skip intro →' },
       { interval: skips.ed, label: 'Skip outro →' },
@@ -527,7 +530,7 @@ function MediaPlayer({
         art.currentTime = interval.end;
         btn.style.display = 'none';
       };
-      container.appendChild(btn);
+      playerElement.appendChild(btn);
       btns.push({ interval, el: btn });
     }
     const update = () => {
