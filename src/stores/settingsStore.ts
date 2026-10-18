@@ -56,6 +56,18 @@ function sidecarDefault(env: unknown, fallback: string): string {
 interface SettingsState {
   defaultQuality: Quality;
   autoplayNext: boolean;
+  /** Show subtitles by default in direct-media playback. */
+  subtitleEnabled: boolean;
+  /** Subtitle font size in pixels. */
+  subtitleFontSize: number;
+  /** Subtitle text color as a CSS hex color. */
+  subtitleColor: string;
+  /** Font family used by direct-stream subtitles. */
+  subtitleFontFamily: string;
+  /** Render subtitle text in bold. */
+  subtitleBold: boolean;
+  /** Add a strong dark outline for readability. */
+  subtitleOutline: boolean;
   providerPriority: string[];
   /** Preferred source provider for each audio mode; empty means automatic. */
   preferredSubProvider: string;
@@ -95,6 +107,12 @@ interface SettingsState {
   discordAppId: string;
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
+  setSubtitleEnabled: (v: boolean) => void;
+  setSubtitleFontSize: (v: number) => void;
+  setSubtitleColor: (v: string) => void;
+  setSubtitleFontFamily: (v: string) => void;
+  setSubtitleBold: (v: boolean) => void;
+  setSubtitleOutline: (v: boolean) => void;
   setProviderPriority: (order: string[]) => void;
   setPreferredSubProvider: (provider: string) => void;
   setPreferredDubProvider: (provider: string) => void;
@@ -116,6 +134,12 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       defaultQuality: 'auto',
       autoplayNext: true,
+      subtitleEnabled: true,
+      subtitleFontSize: 24,
+      subtitleColor: '#ffffff',
+      subtitleFontFamily: 'Arial, sans-serif',
+      subtitleBold: false,
+      subtitleOutline: true,
       providerPriority: [...PROVIDER_PRIORITY],
       preferredSubProvider: '',
       preferredDubProvider: '',
@@ -142,6 +166,13 @@ export const useSettingsStore = create<SettingsState>()(
       discordAppId: '1553307716758536202',
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
+      setSubtitleEnabled: (subtitleEnabled) => set({ subtitleEnabled }),
+      setSubtitleFontSize: (subtitleFontSize) =>
+        set({ subtitleFontSize: Math.min(40, Math.max(14, Math.round(subtitleFontSize))) }),
+      setSubtitleColor: (subtitleColor) => set({ subtitleColor }),
+      setSubtitleFontFamily: (subtitleFontFamily) => set({ subtitleFontFamily }),
+      setSubtitleBold: (subtitleBold) => set({ subtitleBold }),
+      setSubtitleOutline: (subtitleOutline) => set({ subtitleOutline }),
       setProviderPriority: (providerPriority) => set({ providerPriority }),
       setPreferredSubProvider: (preferredSubProvider) => set({ preferredSubProvider }),
       setPreferredDubProvider: (preferredDubProvider) => set({ preferredDubProvider }),
@@ -161,7 +192,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 8,
+      version: 10,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -198,6 +229,16 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 7) {
           // Start the temporary provider-maintenance mode enabled on upgrade.
           s.adultProvidersUnavailable = true;
+        }
+        if (version < 9) {
+          s.subtitleEnabled = s.subtitleEnabled ?? true;
+          s.subtitleFontSize = s.subtitleFontSize ?? 24;
+          s.subtitleColor = s.subtitleColor ?? '#ffffff';
+        }
+        if (version < 10) {
+          s.subtitleFontFamily = s.subtitleFontFamily ?? 'Arial, sans-serif';
+          s.subtitleBold = s.subtitleBold ?? false;
+          s.subtitleOutline = s.subtitleOutline ?? true;
         }
         return s as SettingsState;
       },

@@ -45,8 +45,14 @@ export default function Settings() {
   const {
     defaultQuality,
     autoplayNext,
+    subtitleEnabled,
+    subtitleFontSize,
+    subtitleColor,
     setDefaultQuality,
     setAutoplayNext,
+    setSubtitleEnabled,
+    setSubtitleFontSize,
+    setSubtitleColor,
     consumetBaseUrl,
     enableConsumetFallback,
     setConsumetBaseUrl,
@@ -264,6 +270,29 @@ export default function Settings() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Subtitles enabled by default</p>
+            <p className="text-xs text-zinc-600">Applies to direct video streams. Embedded providers use their own subtitle controls.</p>
+          </div>
+          <Toggle on={subtitleEnabled} onChange={setSubtitleEnabled} />
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Subtitle text size</p>
+            <p className="text-xs text-zinc-600">Current size: {subtitleFontSize}px</p>
+          </div>
+          <select value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent-500/60">
+            {[16, 18, 20, 22, 24, 28, 32, 36, 40].map((size) => <option key={size} value={size}>{size}px</option>)}
+          </select>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Subtitle text color</p>
+            <p className="text-xs text-zinc-600">Used for direct-media subtitles.</p>
+          </div>
+          <input aria-label="Subtitle text color" type="color" value={subtitleColor} onChange={(e) => setSubtitleColor(e.target.value)} className="h-9 w-12 cursor-pointer rounded bg-ink-800 p-1 ring-1 ring-white/10" />
         </div>
         <div className="flex items-center justify-between gap-4">
           <div>
