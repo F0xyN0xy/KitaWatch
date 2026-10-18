@@ -715,25 +715,6 @@ function MediaPlayer({
         </div>,
         subtitleSettingsHost
       )}
-      {subtitles && subtitles.length > 0 && (
-        <div className="flex items-center gap-3 border-t border-white/10 bg-ink-900 px-3 py-2 text-xs">
-          <label className="flex items-center gap-2 text-zinc-300">
-            <input type="checkbox" checked={subtitleEnabled} onChange={(event) => setSubtitleEnabled(event.target.checked)} />
-            Subtitles
-          </label>
-          <label className="flex items-center gap-2 text-zinc-400">
-            Track
-            <select value={selectedSubtitleIndex} onChange={(event) => { setSelectedSubtitleIndex(Number(event.target.value)); setSubtitleNotice(''); }} className="max-w-52 rounded bg-ink-800 px-2 py-1 text-zinc-200 ring-1 ring-white/10">
-              {subtitles.map((track, index) => (
-                <option key={`${track.url}-${index}`} value={index}>
-                  {track.lang || `Subtitle ${index + 1}`}{index === 0 ? ' (default)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          {subtitleNotice && <span role="status" className="text-amber-300">{subtitleNotice}</span>}
-        </div>
-      )}
     </div>
   );
 }
