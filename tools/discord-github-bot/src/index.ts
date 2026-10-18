@@ -288,7 +288,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     const starter = await thread.fetchStarterMessage();
     if (!starter) throw new Error("Could not fetch the original forum post.");
-    const title = safeTitle(starter.content, thread.name);
+    const title = safeTitle(thread.name, "KitaWatch feedback");
     const body = [
       starter.content || "_No description provided._",
       "",
