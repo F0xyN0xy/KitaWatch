@@ -5,6 +5,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import TorrentPanel from '@/components/player/TorrentPanel';
 import ProviderCheck from '@/components/player/ProviderCheck';
+import WatchStatusControl from '@/components/player/WatchStatusControl';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Skeleton from '@/components/ui/Skeleton';
@@ -304,6 +305,8 @@ export default function Watch() {
           ))}
         </div>
       </div>
+
+      {info.data && <WatchStatusControl mediaId={Number(id)} />}
 
       {/* Player (HTTP sources first, torrent blob as last resort).
           Background merges re-trigger streams.reload() — with data already
