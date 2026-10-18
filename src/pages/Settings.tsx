@@ -5,7 +5,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import UpdatesPanel from '@/components/UpdatesPanel';
 import Disclaimer from '@/components/ui/Disclaimer';
-import { useSettingsStore, PROVIDER_PRIORITY, type Quality } from '@/stores/settingsStore';
+import { useSettingsStore, type Quality } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAnimeStore } from '@/stores/animeStore';
 import { anilist, startAniListOAuth } from '@/services/anilist';
@@ -47,10 +47,6 @@ export default function Settings() {
     autoplayNext,
     setDefaultQuality,
     setAutoplayNext,
-    preferredSubProvider,
-    preferredDubProvider,
-    setPreferredSubProvider,
-    setPreferredDubProvider,
     consumetBaseUrl,
     enableConsumetFallback,
     setConsumetBaseUrl,
@@ -249,34 +245,9 @@ export default function Settings() {
       </Section>
 
       <Section title="Playback">
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm text-zinc-300">Preferred SUB provider</p>
-            <p className="text-xs text-zinc-600">Prefer this source when it has a matching stream; otherwise use an available fallback.</p>
-          </div>
-          <select
-            value={preferredSubProvider}
-            onChange={(e) => setPreferredSubProvider(e.target.value)}
-            className="w-full rounded-lg bg-ink-800 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent-500/60"
-          >
-            <option value="">Automatic (recommended)</option>
-            {PROVIDER_PRIORITY.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
-          </select>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm text-zinc-300">Preferred DUB provider</p>
-            <p className="text-xs text-zinc-600">Saved separately from your SUB preference.</p>
-          </div>
-          <select
-            value={preferredDubProvider}
-            onChange={(e) => setPreferredDubProvider(e.target.value)}
-            className="w-full rounded-lg bg-ink-800 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent-500/60"
-          >
-            <option value="">Automatic (recommended)</option>
-            {PROVIDER_PRIORITY.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
-          </select>
-        </div>
+        <p className="text-xs text-zinc-500">
+          Choose a source while watching an episode and press Remember beside it to set your preferred provider for SUB or DUB. The preference is saved separately for each audio mode.
+        </p>
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-zinc-300">Default quality</p>

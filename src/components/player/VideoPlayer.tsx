@@ -271,6 +271,9 @@ function MediaPlayer({
     let instance: Artplayer | null = null;
     let subBlobUrl: string | null = null;
     let failed = false;
+    // AniList progress should update when a viewer reaches 80% of an episode,
+    // not only when the media emits its ended event.
+    let progressCommitted = false;
     // Listeners wired after art creation; cleaned up by the effect return.
     const disposers: (() => void)[] = [];
 
@@ -453,7 +456,20 @@ function MediaPlayer({
           .getState()
           .updatePosition(Number(animeId), episodeNumber, player.currentTime, d);
       };
-      const onTime = () => savePosition();
+      const onTime = () => {
+        savePosition();
+        const duration = player.duration;
+        if (
+          !progressCommitted &&
+          !player.video.seeking &&
+          Number.isFinite(duration) &&
+          duration > 0 &&
+          player.currentTime / duration >= 0.8
+        ) {
+          progressCommitted = true;
+          pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
+        }
+      };
       const onStop = () => savePosition(true);
       player.video.addEventListener('timeupdate', onTime);
       player.video.addEventListener('pause', onStop);

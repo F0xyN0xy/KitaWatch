@@ -14,6 +14,45 @@
 
 export type SourceKind = 'embed' | 'hls' | 'mp4' | 'unknown';
 
+export interface FrameEmbedPolicy {
+  embeddable: boolean;
+  reason?: string;
+}
+
+/**
+ * Inspect response headers for policies that prevent a page from being framed.
+ * This is a detection helper only; it does not bypass browser security policy.
+ */
+export function frameEmbedPolicy(headers: { get(name: string): string | null }): FrameEmbedPolicy {
+  const xFrameOptions = headers.get('x-frame-options')?.trim().toLowerCase();
+  if (xFrameOptions === 'deny') {
+    return { embeddable: false, reason: 'X-Frame-Options: deny' };
+  }
+  if (xFrameOptions === 'sameorigin') {
+    return { embeddable: false, reason: 'X-Frame-Options: sameorigin' };
+  }
+  if (xFrameOptions?.startsWith('allow-from ')) {
+    return { embeddable: false, reason: `X-Frame-Options: ${xFrameOptions}` };
+  }
+
+  const csp = headers.get('content-security-policy');
+  if (csp) {
+    for (const policy of csp.split(',')) {
+      const directive = policy
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => /^frame-ancestors(?:\s|$)/i.test(part));
+      if (!directive) continue;
+      const sources = directive.replace(/^frame-ancestors\s*/i, '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (sources.length !== 1 || sources[0] !== '*') {
+        return { embeddable: false, reason: `CSP frame-ancestors ${sources.join(' ') || '(no allowed ancestors)'}` };
+      }
+    }
+  }
+
+  return { embeddable: true };
+}
+
 const MP4_EXT = ['.mp4', '.m4v'];
 /** Path endings that identify an ordinary webpage, never a media file. */
 const PAGE_EXT = ['.html', '.htm', '.php', '.asp', '.aspx', '.jsp'];

@@ -10,7 +10,7 @@ import Badge from '@/components/ui/Badge';
 import Skeleton from '@/components/ui/Skeleton';
 import ErrorState from '@/components/ui/ErrorState';
 import Disclaimer from '@/components/ui/Disclaimer';
-import { resolveStreams, streamUpdates } from '@/services/streamResolver';
+import { providerPreferenceKey, resolveStreams, streamUpdates } from '@/services/streamResolver';
 import { fetchAnimeInfo } from '@/services/info';
 import { useApi } from '@/hooks/useApi';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -31,6 +31,8 @@ export default function Watch() {
   const navigate = useNavigate();
   const epNum = Number(episode) || 1;
   const autoplayNext = useSettingsStore((s) => s.autoplayNext);
+  const preferredSubProvider = useSettingsStore((s) => s.preferredSubProvider);
+  const preferredDubProvider = useSettingsStore((s) => s.preferredDubProvider);
 
   const info = useApi(() => fetchInfo(id!), [id]);
   // Episode strip: AniList's official count, capped at the latest AIRED
@@ -218,25 +220,49 @@ export default function Watch() {
 
   const renderPill = (s: StreamSource, isActive: boolean, isDeadPill: boolean) => {
     const key = sourceKey(s);
+    const providerKey = providerPreferenceKey(s.server);
+    const savedProvider = audio === 'dub' ? preferredDubProvider : preferredSubProvider;
+    const isPreferred = Boolean(providerKey) && providerPreferenceKey(savedProvider) === providerKey;
     return (
-      <button
-        key={key}
-        onClick={() => !isDeadPill && setActiveKey(key)}
-        disabled={isDeadPill}
-        title={isDeadPill ? 'Unresponsive' : undefined}
-        className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ring-1 transition ${
-          isDeadPill
-            ? 'cursor-not-allowed bg-ink-900 text-zinc-600 ring-white/5 line-through'
-            : isActive
-              ? 'bg-accent-600/20 text-accent-300 ring-accent-500/50'
-              : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
-        }`}
-      >
-        {s.server ?? 'Source'}
-        {s.quality && <span className="text-zinc-500">· {s.quality}</span>}
-        {s.audio === 'sub' && <Badge variant="sub">Sub</Badge>}
-        {s.audio === 'dub' && <Badge variant="dub">Dub</Badge>}
-      </button>
+      <div key={key} className="flex items-center gap-1">
+        <button
+          onClick={() => !isDeadPill && setActiveKey(key)}
+          disabled={isDeadPill}
+          title={isDeadPill ? 'Unresponsive' : undefined}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ring-1 transition ${
+            isDeadPill
+              ? 'cursor-not-allowed bg-ink-900 text-zinc-600 ring-white/5 line-through'
+              : isActive
+                ? 'bg-accent-600/20 text-accent-300 ring-accent-500/50'
+                : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
+          }`}
+        >
+          {s.server ?? 'Source'}
+          {s.quality && <span className="text-zinc-500">· {s.quality}</span>}
+          {s.audio === 'sub' && <Badge variant="sub">Sub</Badge>}
+          {s.audio === 'dub' && <Badge variant="dub">Dub</Badge>}
+        </button>
+        {!isDeadPill && providerKey && (
+          <button
+            type="button"
+            onClick={() => {
+              const current = useSettingsStore.getState();
+              if (audio === 'dub') current.setPreferredDubProvider(providerKey);
+              else current.setPreferredSubProvider(providerKey);
+              setActiveKey(key);
+            }}
+            title={isPreferred ? `Preferred ${audio.toUpperCase()} provider` : `Remember for ${audio.toUpperCase()}`}
+            aria-label={isPreferred ? `Preferred ${audio.toUpperCase()} provider: ${s.server}` : `Remember ${s.server} for ${audio.toUpperCase()}`}
+            className={`rounded-full px-2 py-1.5 text-[10px] ring-1 transition ${
+              isPreferred
+                ? 'bg-accent-600/20 text-accent-300 ring-accent-500/40'
+                : 'bg-ink-850 text-zinc-500 ring-white/10 hover:text-zinc-100'
+            }`}
+          >
+            {isPreferred ? 'Preferred' : 'Remember'}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -414,13 +440,18 @@ export default function Watch() {
       {allSources.length > 0 && !torrent && (
         <section className="rounded-2xl bg-ink-900 p-4 ring-1 ring-white/5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
-              <Layers className="h-4 w-4" />
-              All Sources
-              <span className="rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
-                {live.length}
-              </span>
-            </h2>
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
+                <Layers className="h-4 w-4" />
+                All Sources
+                <span className="rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
+                  {live.length}
+                </span>
+              </h2>
+              <p className="mt-1 text-xs text-zinc-600">
+                Choose a source, then press Remember to prefer it for future {audio.toUpperCase()} episodes.
+              </p>
+            </div>
             {dead.length > 0 && (
               <span className="text-xs text-zinc-600">
                 {dead.length} unresponsive
