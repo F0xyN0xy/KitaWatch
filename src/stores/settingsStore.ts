@@ -95,6 +95,8 @@ interface SettingsState {
    * without ever writing them to their public AniList history.
    */
   updateAdultProgress: boolean;
+  /** Automatically add playable anime to the device-local KitaWatch list. */
+  autoTrackKitaWatch: boolean;
   /** Temporarily hide adult content while its providers are unavailable. */
   adultProvidersUnavailable: boolean;
   /** Show the current anime/episode as Discord activity. */
@@ -125,6 +127,7 @@ interface SettingsState {
   setLastFullscreen: (v: boolean) => void;
   setShowAdultContent: (v: boolean) => void;
   setUpdateAdultProgress: (v: boolean) => void;
+  setAutoTrackKitaWatch: (v: boolean) => void;
   setAdultProvidersUnavailable: (v: boolean) => void;
   setDiscordRichPresence: (v: boolean) => void;
 }
@@ -158,6 +161,8 @@ export const useSettingsStore = create<SettingsState>()(
       // explicitly opts in — H entries would otherwise land in their
       // public activity feed the moment the toggle above is flipped.
       updateAdultProgress: false,
+      // Keep the local playback list enabled by default; users can opt out.
+      autoTrackKitaWatch: true,
       // Enabled by default while adult-content providers are under maintenance.
       adultProvidersUnavailable: true,
       // Rich presence is on by default and always uses KitaWatch's own
@@ -186,13 +191,14 @@ export const useSettingsStore = create<SettingsState>()(
       setLastFullscreen: (lastFullscreen) => set({ lastFullscreen }),
       setShowAdultContent: (showAdultContent) => set({ showAdultContent }),
       setUpdateAdultProgress: (updateAdultProgress) => set({ updateAdultProgress }),
+      setAutoTrackKitaWatch: (autoTrackKitaWatch) => set({ autoTrackKitaWatch }),
       setAdultProvidersUnavailable: (adultProvidersUnavailable) =>
         set({ adultProvidersUnavailable }),
       setDiscordRichPresence: (discordRichPresence) => set({ discordRichPresence }),
     }),
     {
       name: 'kitawatch-settings',
-      version: 10,
+      version: 11,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -239,6 +245,11 @@ export const useSettingsStore = create<SettingsState>()(
           s.subtitleFontFamily = s.subtitleFontFamily ?? 'Arial, sans-serif';
           s.subtitleBold = s.subtitleBold ?? false;
           s.subtitleOutline = s.subtitleOutline ?? true;
+        }
+        if (version < 11) {
+          // Existing users get local playback tracking enabled unless they
+          // explicitly opt out after this setting is introduced.
+          s.autoTrackKitaWatch = s.autoTrackKitaWatch ?? true;
         }
         return s as SettingsState;
       },
