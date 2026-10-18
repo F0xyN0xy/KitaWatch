@@ -26,10 +26,10 @@ export interface FrameEmbedPolicy {
 export function frameEmbedPolicy(headers: { get(name: string): string | null }): FrameEmbedPolicy {
   const xFrameOptions = headers.get('x-frame-options')?.trim().toLowerCase();
   if (xFrameOptions === 'deny') {
-    return { embeddable: false, reason: 'X-Frame-Options: DENY' };
+    return { embeddable: false, reason: 'X-Frame-Options: deny' };
   }
   if (xFrameOptions === 'sameorigin') {
-    return { embeddable: false, reason: 'X-Frame-Options: SAMEORIGIN' };
+    return { embeddable: false, reason: 'X-Frame-Options: sameorigin' };
   }
   if (xFrameOptions?.startsWith('allow-from ')) {
     return { embeddable: false, reason: `X-Frame-Options: ${xFrameOptions}` };
