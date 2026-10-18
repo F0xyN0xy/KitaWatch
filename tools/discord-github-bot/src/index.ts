@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import Database from "better-sqlite3";
 import {
   ActionRowBuilder,
@@ -350,34 +351,13 @@ const app = express();
 
 // Keep the expensive diagnostics endpoint from being used as an unlimited
 // public trigger for database writes and outbound Discord/GitHub requests.
-// Do not trust forwarded IP headers unless proxy trust is explicitly configured.
-const diagnosticsRateLimit = new Map<string, { windowStartedAt: number; count: number }>();
-const DIAGNOSTICS_WINDOW_MS = 60_000;
-const DIAGNOSTICS_MAX_REQUESTS = 10;
-const diagnosticsRateLimiter: express.RequestHandler = (req, res, next) => {
-  const now = Date.now();
-  const key = req.ip || "unknown";
-  let bucket = diagnosticsRateLimit.get(key);
-
-  if (!bucket || now - bucket.windowStartedAt >= DIAGNOSTICS_WINDOW_MS) {
-    bucket = { windowStartedAt: now, count: 0 };
-    diagnosticsRateLimit.set(key, bucket);
-  }
-
-  // Prune expired entries so the map does not grow indefinitely.
-  for (const [ip, entry] of diagnosticsRateLimit) {
-    if (now - entry.windowStartedAt >= DIAGNOSTICS_WINDOW_MS) diagnosticsRateLimit.delete(ip);
-  }
-
-  if (bucket.count >= DIAGNOSTICS_MAX_REQUESTS) {
-    const retryAfter = Math.max(1, Math.ceil((DIAGNOSTICS_WINDOW_MS - (now - bucket.windowStartedAt)) / 1000));
-    res.set("Retry-After", String(retryAfter)).status(429).json({ error: "Too many diagnostics requests. Try again later." });
-    return;
-  }
-
-  bucket.count += 1;
-  next();
-};
+const diagnosticsRateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many diagnostics requests. Try again later." },
+});
 
 app.get("/health", (_req, res) => res.status(200).json({
   ok: true,
