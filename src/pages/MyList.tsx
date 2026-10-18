@@ -4,7 +4,7 @@ import { Bookmark, Check, ListPlus, Pencil, Plus, Trash2, X } from 'lucide-react
 import PageContainer from '@/components/layout/PageContainer';
 import AnimeCard from '@/components/anime/AnimeCard';
 import Button from '@/components/ui/Button';
-import { useAnimeStore } from '@/stores/animeStore';
+import { KITAWATCH_LIST_ID, useAnimeStore } from '@/stores/animeStore';
 import type { AnimeSummary } from '@/types';
 
 const FAVORITES_ID = '__favorites__';
@@ -117,7 +117,13 @@ export default function MyList() {
         )}
       </div>
 
-      {effectiveId !== FAVORITES_ID && activeList && (
+      {effectiveId === KITAWATCH_LIST_ID && (
+        <p className="text-xs text-zinc-500">
+          Anime with a playable source are added automatically. This list stays on this device and is separate from AniList.
+        </p>
+      )}
+
+      {effectiveId !== FAVORITES_ID && activeList && effectiveId !== KITAWATCH_LIST_ID && (
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <button
             onClick={() => {

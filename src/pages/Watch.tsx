@@ -16,6 +16,7 @@ import { fetchAnimeInfo } from '@/services/info';
 import { useApi } from '@/hooks/useApi';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHistoryStore } from '@/stores/historyStore';
+import { useAnimeStore } from '@/stores/animeStore';
 import { setDiscordPresence, clearDiscordPresence } from '@/services/discord';
 import type { StreamSource } from '@/types';
 
@@ -32,6 +33,8 @@ export default function Watch() {
   const navigate = useNavigate();
   const epNum = Number(episode) || 1;
   const autoplayNext = useSettingsStore((s) => s.autoplayNext);
+  const autoTrackKitaWatch = useSettingsStore((s) => s.autoTrackKitaWatch);
+  const trackInKitaWatch = useAnimeStore((s) => s.trackInKitaWatch);
   const preferredSubProvider = useSettingsStore((s) => s.preferredSubProvider);
   const preferredDubProvider = useSettingsStore((s) => s.preferredDubProvider);
 
@@ -218,6 +221,13 @@ export default function Watch() {
       onEnded={() => navigate(`/watch/${id}/${epNum + 1}`)}
     />
   );
+
+  // Maintain a local, platform-specific list only when the user opts in and
+  // a playable source has been selected. This is separate from AniList sync.
+  useEffect(() => {
+    if (!autoTrackKitaWatch || !info.data || (!activeSource && !torrent)) return;
+    trackInKitaWatch(info.data);
+  }, [autoTrackKitaWatch, info.data, activeSource, torrent, trackInKitaWatch]);
 
   const renderPill = (s: StreamSource, isActive: boolean, isDeadPill: boolean) => {
     const key = sourceKey(s);

@@ -9,6 +9,9 @@ export interface CustomList {
   createdAt: number;
 }
 
+/** Stable id for the automatically maintained, device-local playback list. */
+export const KITAWATCH_LIST_ID = '__kitawatch_history__';
+
 interface AnimeState {
   favorites: AnimeSummary[];
   toggleFavorite: (anime: AnimeSummary) => void;
@@ -17,10 +20,12 @@ interface AnimeState {
   /** Merge remote (AniList) favorites without duplicating local ones. */
   mergeFavorites: (list: AnimeSummary[]) => void;
 
-  /** User-created named lists, in creation order. */
+  /** User-created named lists, plus the reserved KitaWatch playback list. */
   customLists: CustomList[];
   /** Create a list; returns its id. No-op (returns existing id) on duplicates. */
   createList: (name: string) => string;
+  /** Add/update an anime in the reserved local playback list. */
+  trackInKitaWatch: (anime: AnimeSummary) => void;
   renameList: (id: string, name: string) => void;
   deleteList: (id: string) => void;
   addToList: (listId: string, anime: AnimeSummary) => void;
@@ -71,14 +76,43 @@ export const useAnimeStore = create<AnimeState>()(
         }));
         return id;
       },
-      renameList: (id, name) =>
+      trackInKitaWatch: (anime) =>
+        set((s) => {
+          // Adopt an existing user-created "KitaWatch" list so enabling this
+          // feature never discards its entries when upgrading.
+          const existing =
+            s.customLists.find((l) => l.id === KITAWATCH_LIST_ID) ??
+            s.customLists.find((l) => l.name.trim().toLowerCase() === 'kitawatch');
+          const current = existing?.anime ?? [];
+          const index = current.findIndex((entry) => entry.id === anime.id);
+          const updatedAnime =
+            index < 0
+              ? [anime, ...current]
+              : current.map((entry) => (entry.id === anime.id ? anime : entry));
+          const tracked: CustomList = {
+            id: KITAWATCH_LIST_ID,
+            name: 'KitaWatch',
+            anime: updatedAnime,
+            createdAt: existing?.createdAt ?? Date.now(),
+          };
+          return {
+            customLists: existing
+              ? s.customLists.map((list) => (list === existing ? tracked : list))
+              : [...s.customLists, tracked],
+          };
+        }),
+      renameList: (id, name) => {
+        if (id === KITAWATCH_LIST_ID) return;
         set((s) => ({
           customLists: s.customLists.map((l) =>
             l.id === id ? { ...l, name: name.trim() || l.name } : l,
           ),
-        })),
-      deleteList: (id) =>
-        set((s) => ({ customLists: s.customLists.filter((l) => l.id !== id) })),
+        }));
+      },
+      deleteList: (id) => {
+        if (id === KITAWATCH_LIST_ID) return;
+        set((s) => ({ customLists: s.customLists.filter((l) => l.id !== id) }));
+      },
       addToList: (listId, anime) =>
         set((s) => ({
           customLists: s.customLists.map((l) =>
