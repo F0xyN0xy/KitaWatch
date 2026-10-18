@@ -136,7 +136,6 @@ export function normalizeAnime(raw: unknown): AnimeSummary {
 //      search box, or picking the Hentai genre filter in Browse
 // Direct ID access (details, watch, own favorites) is never filtered.
 
-const ADULT_QUERY_RE = /hentai/i;
 const ADULT_INTENT_RE = /hentai|adult(?:\s+content)?|18\+/i;
 
 /** Detect explicit adult-search intent so Browse can show the maintenance notice. */
@@ -144,13 +143,9 @@ export function isAdultSearchIntent(value?: string): boolean {
   return !!value && ADULT_INTENT_RE.test(value);
 }
 
-export function adultContentAllowed(explicit?: string): boolean {
-  const settings = useSettingsStore.getState();
-  // The temporary maintenance switch overrides both explicit searches and
-  // the normal visibility toggle until adult-content providers are available.
-  if (settings.adultProvidersUnavailable) return false;
-  if (settings.showAdultContent) return true;
-  return !!explicit && ADULT_QUERY_RE.test(explicit);
+export function adultContentAllowed(_explicit?: string): boolean {
+  // Adult content providers are permanently under maintenance until a future update.
+  return false;
 }
 
 /** v3 returns { results, hasNextPage, ... }; tolerate bare arrays (older forks). */

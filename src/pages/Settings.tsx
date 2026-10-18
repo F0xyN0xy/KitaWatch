@@ -67,8 +67,6 @@ export default function Settings() {
     setUpdateAdultProgress,
     autoTrackKitaWatch,
     setAutoTrackKitaWatch,
-    adultProvidersUnavailable,
-    setAdultProvidersUnavailable,
   } = useSettingsStore();
 
   const { accessToken, viewer, clear } = useAuthStore();
@@ -221,16 +219,6 @@ export default function Settings() {
       </Section>
 
       <Section title="Adult Content">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-zinc-300">Adult providers temporarily unavailable</p>
-            <p className="text-xs text-zinc-600">
-              Hides adult content from search and discovery while providers are being worked on.
-              Overrides the normal adult-content visibility setting.
-            </p>
-          </div>
-          <Toggle on={adultProvidersUnavailable} onChange={setAdultProvidersUnavailable} />
-        </div>
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-zinc-300">Show adult content</p>

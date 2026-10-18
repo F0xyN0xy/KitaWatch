@@ -6,7 +6,6 @@ import Skeleton from '@/components/ui/Skeleton';
 import ErrorState from '@/components/ui/ErrorState';
 import Button from '@/components/ui/Button';
 import { api, isAdultSearchIntent } from '@/services/api';
-import { useSettingsStore } from '@/stores/settingsStore';
 import type { AnimeSummary, FilterSort } from '@/types';
 
 const SORTS = [
@@ -24,9 +23,7 @@ export default function Browse() {
   const sort: SortKey =
     rawSort === 'popular' || rawSort === 'recent' ? rawSort : 'trending';
   const genre = searchParams.get('genre') ?? '';
-  const adultProvidersUnavailable = useSettingsStore((s) => s.adultProvidersUnavailable);
-  const blockedAdultIntent =
-    adultProvidersUnavailable && isAdultSearchIntent(q || genre);
+  const blockedAdultIntent = isAdultSearchIntent(q || genre);
 
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<AnimeSummary[]>([]);
