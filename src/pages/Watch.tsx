@@ -31,6 +31,8 @@ export default function Watch() {
   const navigate = useNavigate();
   const epNum = Number(episode) || 1;
   const autoplayNext = useSettingsStore((s) => s.autoplayNext);
+  const preferredSubProvider = useSettingsStore((s) => s.preferredSubProvider);
+  const preferredDubProvider = useSettingsStore((s) => s.preferredDubProvider);
 
   const info = useApi(() => fetchInfo(id!), [id]);
   // Episode strip: AniList's official count, capped at the latest AIRED
@@ -219,9 +221,7 @@ export default function Watch() {
   const renderPill = (s: StreamSource, isActive: boolean, isDeadPill: boolean) => {
     const key = sourceKey(s);
     const providerKey = providerPreferenceKey(s.server);
-    const settings = useSettingsStore.getState();
-    const savedProvider =
-      audio === 'dub' ? settings.preferredDubProvider : settings.preferredSubProvider;
+    const savedProvider = audio === 'dub' ? preferredDubProvider : preferredSubProvider;
     const isPreferred = Boolean(providerKey) && providerPreferenceKey(savedProvider) === providerKey;
     return (
       <div key={key} className="flex items-center gap-1">
@@ -444,9 +444,9 @@ export default function Watch() {
               <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
                 <Layers className="h-4 w-4" />
                 All Sources
-              <span className="rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
-                {live.length}
-              </span>
+                <span className="rounded-full bg-ink-800 px-2 py-0.5 text-xs normal-case tracking-normal text-zinc-400 ring-1 ring-white/10">
+                  {live.length}
+                </span>
               </h2>
               <p className="mt-1 text-xs text-zinc-600">
                 Choose a source, then press Remember to prefer it for future {audio.toUpperCase()} episodes.
