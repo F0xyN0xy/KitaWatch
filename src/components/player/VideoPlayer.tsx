@@ -251,6 +251,7 @@ function MediaPlayer({
 }: Props & { kind: 'hls' | 'mp4' }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [art, setArt] = useState<Artplayer | null>(null);
+  const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
   const [subtitleNotice, setSubtitleNotice] = useState('');
   const subtitleEnabled = useSettingsStore((s) => s.subtitleEnabled);
   const subtitleFontSize = useSettingsStore((s) => s.subtitleFontSize);
@@ -264,6 +265,11 @@ function MediaPlayer({
   const latest = useRef({ subtitles, poster });
   latest.current = { subtitles, poster };
   const skips = useIntroSkip(animeId, episodeNumber);
+
+  useEffect(() => {
+    setSelectedSubtitleIndex(0);
+    setSubtitleNotice('');
+  }, [source.url]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -315,6 +321,7 @@ function MediaPlayer({
           }
           if (cancelled) return;
         }
+        if (!subBlobUrl && sub) setSubtitleNotice(`Could not load subtitles: ${sub.lang || 'default track'}.`);
       }
 
       if (cancelled || !containerRef.current) return;
@@ -381,7 +388,7 @@ function MediaPlayer({
             if (!cancelled) player.plugins.add(jassubPlugin(proxy.cors(sub.url)));
           })
           .catch(() => {
-            /* fall back to no subtitles */
+            setSubtitleNotice('Could not load ASS/SSA subtitles. Try another track or source.');
           });
       }
 
@@ -522,6 +529,26 @@ function MediaPlayer({
     }
   }, [art, subtitleEnabled, subtitleFontSize, subtitleColor]);
 
+  // Switch available VTT/SRT tracks without restarting playback. The local
+  // proxy avoids the CORS restrictions that often affect subtitle CDNs.
+  useEffect(() => {
+    if (!art || !subtitles?.length) return;
+    const track = subtitles[selectedSubtitleIndex];
+    if (!track) return;
+    const type = subtitleFormat(track.url);
+    if (type === 'ass') {
+      if (selectedSubtitleIndex !== 0) setSubtitleNotice('ASS/SSA track switching is not supported yet.');
+      return;
+    }
+    try {
+      art.subtitle.switch(proxy.segment(track.url), type === 'srt' ? 'srt' : 'vtt', track.lang || `Subtitle ${selectedSubtitleIndex + 1}`);
+      art.subtitle.show = subtitleEnabled;
+      setSubtitleNotice('');
+    } catch {
+      setSubtitleNotice(`Could not switch to ${track.lang || 'the selected subtitle track'}.`);
+    }
+  }, [art, subtitles, selectedSubtitleIndex, subtitleEnabled]);
+
   // intro/outro skip buttons (AniSkip data). Only visible while the
   // playhead is inside the skip window — no permanent button clutter.
   // Keyed on the player *instance* (state), because the instance is created
@@ -575,6 +602,16 @@ function MediaPlayer({
           <label className="flex items-center gap-2 text-zinc-300">
             <input type="checkbox" checked={subtitleEnabled} onChange={(event) => setSubtitleEnabled(event.target.checked)} />
             Subtitles
+          </label>
+          <label className="flex items-center gap-2 text-zinc-400">
+            Track
+            <select value={selectedSubtitleIndex} onChange={(event) => { setSelectedSubtitleIndex(Number(event.target.value)); setSubtitleNotice(''); }} className="max-w-52 rounded bg-ink-800 px-2 py-1 text-zinc-200 ring-1 ring-white/10">
+              {subtitles.map((track, index) => (
+                <option key={`${track.url}-${index}`} value={index}>
+                  {track.lang || `Subtitle ${index + 1}`}{index === 0 ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
           </label>
           {subtitleNotice && <span role="status" className="text-amber-300">{subtitleNotice}</span>}
         </div>
