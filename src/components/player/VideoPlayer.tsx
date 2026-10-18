@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 import type { StreamSource, SubtitleTrack } from '@/types';
@@ -251,12 +252,22 @@ function MediaPlayer({
 }: Props & { kind: 'hls' | 'mp4' }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [art, setArt] = useState<Artplayer | null>(null);
+  const [subtitleSettingsHost, setSubtitleSettingsHost] = useState<HTMLElement | null>(null);
+  const [subtitleSettingsOpen, setSubtitleSettingsOpen] = useState(false);
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
   const [subtitleNotice, setSubtitleNotice] = useState('');
   const subtitleEnabled = useSettingsStore((s) => s.subtitleEnabled);
   const subtitleFontSize = useSettingsStore((s) => s.subtitleFontSize);
   const subtitleColor = useSettingsStore((s) => s.subtitleColor);
+  const subtitleFontFamily = useSettingsStore((s) => s.subtitleFontFamily);
+  const subtitleBold = useSettingsStore((s) => s.subtitleBold);
+  const subtitleOutline = useSettingsStore((s) => s.subtitleOutline);
   const setSubtitleEnabled = useSettingsStore((s) => s.setSubtitleEnabled);
+  const setSubtitleFontSize = useSettingsStore((s) => s.setSubtitleFontSize);
+  const setSubtitleColor = useSettingsStore((s) => s.setSubtitleColor);
+  const setSubtitleFontFamily = useSettingsStore((s) => s.setSubtitleFontFamily);
+  const setSubtitleBold = useSettingsStore((s) => s.setSubtitleBold);
+  const setSubtitleOutline = useSettingsStore((s) => s.setSubtitleOutline);
   // Latest callbacks without re-creating the player instance
   const callbacks = useRef({ onEnded, onFatal });
   callbacks.current = { onEnded, onFatal };
@@ -522,32 +533,74 @@ function MediaPlayer({
       art.subtitle.style({
         color: subtitleColor,
         fontSize: `${subtitleFontSize}px`,
-        textShadow: '0 0 5px #000',
+        fontFamily: subtitleFontFamily,
+        fontWeight: subtitleBold ? 'bold' : 'normal',
+        textShadow: subtitleOutline
+          ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 5px #000'
+          : '0 0 5px #000',
       });
     } catch {
       setSubtitleNotice('Subtitle styling is unavailable for this stream.');
     }
-  }, [art, subtitleEnabled, subtitleFontSize, subtitleColor]);
+  }, [art, subtitleEnabled, subtitleFontSize, subtitleColor, subtitleFontFamily, subtitleBold, subtitleOutline]);
 
-  // Switch available VTT/SRT tracks without restarting playback. The local
-  // proxy avoids the CORS restrictions that often affect subtitle CDNs.
+  // Load the selected track through the direct URL first, then the local
+  // playback proxy. Blob URLs avoid cross-origin subtitle requests and work
+  // with providers whose subtitle host blocks CORS.
+  // ArtPlayer's switch API accepts URL + format, not a third language arg.
   useEffect(() => {
     if (!art || !subtitles?.length) return;
     const track = subtitles[selectedSubtitleIndex];
     if (!track) return;
     const type = subtitleFormat(track.url);
     if (type === 'ass') {
-      if (selectedSubtitleIndex !== 0) setSubtitleNotice('ASS/SSA track switching is not supported yet.');
+      if (selectedSubtitleIndex !== 0) setSubtitleNotice('Switching to another ASS/SSA track is not supported yet.');
       return;
     }
-    try {
-      art.subtitle.switch(proxy.segment(track.url), type === 'srt' ? 'srt' : 'vtt', track.lang || `Subtitle ${selectedSubtitleIndex + 1}`);
-      art.subtitle.show = subtitleEnabled;
-      setSubtitleNotice('');
-    } catch {
-      setSubtitleNotice(`Could not switch to ${track.lang || 'the selected subtitle track'}.`);
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const loadTrack = async () => {
+      for (const candidate of [track.url, proxy.segment(track.url)]) {
+        try {
+          const response = await fetch(candidate);
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          if (cancelled) return;
+          blobUrl = URL.createObjectURL(blob);
+          art.subtitle.switch(blobUrl, type === 'srt' ? 'srt' : 'vtt');
+          art.subtitle.show = useSettingsStore.getState().subtitleEnabled;
+          setSubtitleNotice('');
+          return;
+        } catch {
+          // Try the proxy fallback after a direct CORS/network failure.
+        }
+        if (cancelled) return;
+      }
+      if (!cancelled) setSubtitleNotice(`Could not load ${track.lang || 'the selected subtitle track'} from this provider.`);
+    };
+    void loadTrack();
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [art, subtitles, selectedSubtitleIndex]);
+
+  // Mount subtitle controls inside ArtPlayer's fullscreen subtree.
+  useEffect(() => {
+    const playerElement = art?.template.$player;
+    if (!playerElement || !subtitles?.length) {
+      setSubtitleSettingsHost(null);
+      return;
     }
-  }, [art, subtitles, selectedSubtitleIndex, subtitleEnabled]);
+    const host = document.createElement('div');
+    host.className = 'pointer-events-none absolute inset-0 z-[90]';
+    playerElement.appendChild(host);
+    setSubtitleSettingsHost(host);
+    return () => {
+      setSubtitleSettingsHost(null);
+      host.remove();
+    };
+  }, [art, subtitles?.length]);
 
   // intro/outro skip buttons (AniSkip data). Only visible while the
   // playhead is inside the skip window — no permanent button clutter.
@@ -597,6 +650,68 @@ function MediaPlayer({
   return (
     <div className={FRAME_CLASS}>
       <div ref={containerRef} className="aspect-video w-full" />
+      {subtitleSettingsHost && subtitles && subtitles.length > 0 && createPortal(
+        <div className="pointer-events-auto absolute right-3 top-3 z-[100] flex flex-col items-end gap-2">
+          <button
+            type="button"
+            aria-expanded={subtitleSettingsOpen}
+            onClick={() => setSubtitleSettingsOpen((open) => !open)}
+            className="rounded-lg bg-black/75 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/20 shadow-lg hover:bg-black/90"
+          >
+            CC / Subtitle settings
+          </button>
+          {subtitleSettingsOpen && (
+            <div className="w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl bg-black/90 p-4 text-sm text-white shadow-2xl ring-1 ring-white/20">
+              <label className="flex items-center justify-between gap-3">
+                <span>Subtitles</span>
+                <input type="checkbox" checked={subtitleEnabled} onChange={(event) => setSubtitleEnabled(event.target.checked)} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-zinc-300">Subtitle track</span>
+                <select
+                  value={selectedSubtitleIndex}
+                  onChange={(event) => { setSelectedSubtitleIndex(Number(event.target.value)); setSubtitleNotice(''); }}
+                  className="w-full rounded-md bg-zinc-800 px-2 py-2 text-white"
+                >
+                  {subtitles.map((track, index) => (
+                    <option key={`${track.url}-${index}`} value={index}>
+                      {track.lang || `Subtitle ${index + 1}`}{index === 0 ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="flex justify-between text-xs text-zinc-300"><span>Text size</span><span>{subtitleFontSize}px</span></span>
+                <input type="range" min="14" max="40" step="2" value={subtitleFontSize} onChange={(event) => setSubtitleFontSize(Number(event.target.value))} className="w-full accent-purple-500" />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Text color</span>
+                <input aria-label="Subtitle text color" type="color" value={subtitleColor} onChange={(event) => setSubtitleColor(event.target.value)} className="h-8 w-10 cursor-pointer rounded bg-zinc-800 p-0.5" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-zinc-300">Font</span>
+                <select value={subtitleFontFamily} onChange={(event) => setSubtitleFontFamily(event.target.value)} className="w-full rounded-md bg-zinc-800 px-2 py-2 text-white">
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Verdana, sans-serif">Verdana</option>
+                  <option value="Tahoma, sans-serif">Tahoma</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="monospace">Monospace</option>
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Bold text</span>
+                <input type="checkbox" checked={subtitleBold} onChange={(event) => setSubtitleBold(event.target.checked)} />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Dark text outline</span>
+                <input type="checkbox" checked={subtitleOutline} onChange={(event) => setSubtitleOutline(event.target.checked)} />
+              </label>
+              {subtitleNotice && <p role="status" className="text-xs text-amber-300">{subtitleNotice}</p>}
+            </div>
+          )}
+        </div>,
+        subtitleSettingsHost
+      )}
       {subtitles && subtitles.length > 0 && (
         <div className="flex items-center gap-3 border-t border-white/10 bg-ink-900 px-3 py-2 text-xs">
           <label className="flex items-center gap-2 text-zinc-300">
