@@ -347,6 +347,16 @@ function MediaPlayer({
         theme: '#9333ea',
         screenshot: true,
         setting: true,
+        controls: latest.current.subtitles?.length
+          ? [{
+              name: 'kitawatch-subtitles',
+              index: 10,
+              position: 'right',
+              html: '<span style="font-size:12px;font-weight:700;letter-spacing:.02em">CC</span>',
+              tooltip: 'Subtitle settings',
+              click: () => setSubtitleSettingsOpen((open) => !open),
+            }]
+          : [],
         subtitleOffset: true,
         pip: true,
         fullscreen: true,
@@ -567,7 +577,10 @@ function MediaPlayer({
           const blob = await response.blob();
           if (cancelled) return;
           blobUrl = URL.createObjectURL(blob);
-          art.subtitle.switch(blobUrl, type === 'srt' ? 'srt' : 'vtt');
+          art.subtitle.switch(blobUrl, {
+            type: type === 'srt' ? 'srt' : 'vtt',
+            name: track.lang || `Subtitle ${selectedSubtitleIndex + 1}`,
+          });
           art.subtitle.show = useSettingsStore.getState().subtitleEnabled;
           setSubtitleNotice('');
           return;
@@ -650,17 +663,8 @@ function MediaPlayer({
   return (
     <div className={FRAME_CLASS}>
       <div ref={containerRef} className="aspect-video w-full" />
-      {subtitleSettingsHost && subtitles && subtitles.length > 0 && createPortal(
-        <div className="pointer-events-auto absolute right-3 top-3 z-[100] flex flex-col items-end gap-2">
-          <button
-            type="button"
-            aria-expanded={subtitleSettingsOpen}
-            onClick={() => setSubtitleSettingsOpen((open) => !open)}
-            className="rounded-lg bg-black/75 px-3 py-2 text-sm font-medium text-white ring-1 ring-white/20 shadow-lg hover:bg-black/90"
-          >
-            CC / Subtitle settings
-          </button>
-          {subtitleSettingsOpen && (
+      {subtitleSettingsHost && subtitles && subtitles.length > 0 && subtitleSettingsOpen && createPortal(
+        <div className="pointer-events-auto absolute bottom-12 right-3 z-[100]">
             <div className="w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl bg-black/90 p-4 text-sm text-white shadow-2xl ring-1 ring-white/20">
               <label className="flex items-center justify-between gap-3">
                 <span>Subtitles</span>
@@ -708,7 +712,6 @@ function MediaPlayer({
               </label>
               {subtitleNotice && <p role="status" className="text-xs text-amber-300">{subtitleNotice}</p>}
             </div>
-          )}
         </div>,
         subtitleSettingsHost
       )}
