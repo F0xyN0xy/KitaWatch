@@ -225,9 +225,9 @@ export default function Watch() {
   // Maintain a local, platform-specific list only when the user opts in and
   // a playable source has been selected. This is separate from AniList sync.
   useEffect(() => {
-    if (!autoTrackKitaWatch || !info.data || (!activeSource && !torrentSource)) return;
+    if (!autoTrackKitaWatch || !info.data || (!activeSource && !torrent)) return;
     trackInKitaWatch(info.data);
-  }, [autoTrackKitaWatch, info.data, activeSource, torrentSource, trackInKitaWatch]);
+  }, [autoTrackKitaWatch, info.data, activeSource, torrent, trackInKitaWatch]);
 
   const renderPill = (s: StreamSource, isActive: boolean, isDeadPill: boolean) => {
     const key = sourceKey(s);
