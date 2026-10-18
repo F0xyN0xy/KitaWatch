@@ -251,6 +251,11 @@ function MediaPlayer({
 }: Props & { kind: 'hls' | 'mp4' }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [art, setArt] = useState<Artplayer | null>(null);
+  const [subtitleNotice, setSubtitleNotice] = useState('');
+  const subtitleEnabled = useSettingsStore((s) => s.subtitleEnabled);
+  const subtitleFontSize = useSettingsStore((s) => s.subtitleFontSize);
+  const subtitleColor = useSettingsStore((s) => s.subtitleColor);
+  const setSubtitleEnabled = useSettingsStore((s) => s.setSubtitleEnabled);
   // Latest callbacks without re-creating the player instance
   const callbacks = useRef({ onEnded, onFatal });
   callbacks.current = { onEnded, onFatal };
@@ -502,6 +507,21 @@ function MediaPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.url, source.referer, kind, animeId, episodeNumber]);
 
+  // Apply persisted subtitle visibility and appearance without recreating the player.
+  useEffect(() => {
+    if (!art) return;
+    try {
+      art.subtitle.show = subtitleEnabled;
+      art.subtitle.style({
+        color: subtitleColor,
+        fontSize: `${subtitleFontSize}px`,
+        textShadow: '0 0 5px #000',
+      });
+    } catch {
+      setSubtitleNotice('Subtitle styling is unavailable for this stream.');
+    }
+  }, [art, subtitleEnabled, subtitleFontSize, subtitleColor]);
+
   // intro/outro skip buttons (AniSkip data). Only visible while the
   // playhead is inside the skip window — no permanent button clutter.
   // Keyed on the player *instance* (state), because the instance is created
@@ -550,6 +570,15 @@ function MediaPlayer({
   return (
     <div className={FRAME_CLASS}>
       <div ref={containerRef} className="aspect-video w-full" />
+      {subtitles && subtitles.length > 0 && (
+        <div className="flex items-center gap-3 border-t border-white/10 bg-ink-900 px-3 py-2 text-xs">
+          <label className="flex items-center gap-2 text-zinc-300">
+            <input type="checkbox" checked={subtitleEnabled} onChange={(event) => setSubtitleEnabled(event.target.checked)} />
+            Subtitles
+          </label>
+          {subtitleNotice && <span role="status" className="text-amber-300">{subtitleNotice}</span>}
+        </div>
+      )}
     </div>
   );
 }
