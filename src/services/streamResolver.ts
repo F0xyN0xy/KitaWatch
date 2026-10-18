@@ -52,8 +52,17 @@ function titleContext(animeId: number | string, title: string | undefined) {
   };
 }
 
-/** Order streams by the user's provider preference list (prefix match on
- *  "server" so e.g. "anikage:koto" follows "anikage"). */
+/** Normalize a displayed server label or namespaced server tag to its provider family. */
+export function providerPreferenceKey(server?: string): string {
+  const raw = (server ?? '').trim().toLowerCase();
+  if (!raw) return '';
+  const withoutAggregator = raw.startsWith('anivexa:') ? raw.slice('anivexa:'.length) : raw;
+  const family = withoutAggregator.split(':')[0];
+  return family.replace(/[^a-z0-9]/g, '');
+}
+
+/** Order streams by the user's provider preference list, using the same
+ * normalized provider identity for both settings and displayed source labels. */
 function prioritize(streams: StreamSource[]): StreamSource[] {
   const settings = useSettingsStore.getState();
   const order = settings.providerPriority.map((p) => p.toLowerCase());
@@ -61,13 +70,12 @@ function prioritize(streams: StreamSource[]): StreamSource[] {
   const rank = (s: StreamSource) => {
     if (s.verified === false) return 999; // probed dead — sink to the bottom
 
+    const provider = providerPreferenceKey(s.server);
+    const preferred = providerPreferenceKey(
+      s.audio === 'dub' ? settings.preferredDubProvider : settings.preferredSubProvider,
+    );
+    const matchesPreferred = Boolean(preferred) && provider === preferred;
     const server = (s.server ?? '').toLowerCase();
-    const preferred = (s.audio === 'dub' ? settings.preferredDubProvider : settings.preferredSubProvider).toLowerCase();
-    const provider = server.startsWith('anivexa:') ? server.slice('anivexa:'.length) : server;
-    const matchesPreferred = Boolean(preferred) && (provider === preferred || provider.startsWith(`${preferred}:`));
-    // Anivexa labels its streams "anivexa:<provider>", while the settings
-    // list stores the provider name by itself (e.g. "anizone"). Compare
-    // both the complete tag and the nested provider name.
     const candidates = server.startsWith('anivexa:')
       ? [server, server.slice('anivexa:'.length), 'anivexa']
       : [server];
