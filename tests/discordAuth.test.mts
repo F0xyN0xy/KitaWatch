@@ -18,6 +18,13 @@ test('rejects callbacks from other protocols or hosts', () => {
   assert.equal(parseDiscordAuthCallback('kitawatch://other?provider=discord&code=x'), null);
 });
 
+test('rejects implicit-flow token fragments instead of treating them as a code', () => {
+  assert.equal(
+    parseDiscordAuthCallback('kitawatch://auth?provider=discord#access_token=redacted&refresh_token=redacted'),
+    null,
+  );
+});
+
 test('rejects missing or empty authorization codes', () => {
   assert.equal(parseDiscordAuthCallback('kitawatch://auth?provider=discord'), null);
   assert.equal(parseDiscordAuthCallback('kitawatch://auth?provider=discord&code='), null);
