@@ -12,6 +12,7 @@ import { anilist, startAniListOAuth } from '@/services/anilist';
 import { completeLogin, markLoginPending, setAuthNotifier } from '@/services/authFlow';
 import { getDebugReport } from '@/services/debug';
 import { setFullscreenRemember } from '@/services/windowState';
+import DiscordAccount from '@/components/DiscordAccount';
 
 const QUALITIES: Quality[] = ['auto', '1080p', '720p', '480p'];
 
@@ -324,6 +325,8 @@ export default function Settings() {
           />
         </div>
       </Section>
+
+      <DiscordAccount />
 
       <Section title="Discord Activity">
         <div className="flex items-center justify-between gap-4">
