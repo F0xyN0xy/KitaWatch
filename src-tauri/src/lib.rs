@@ -14,7 +14,15 @@ pub fn run() {
         // single-instance MUST be the first plugin — with its "deep-link"
         // feature it forwards OAuth callbacks (kitawatch://auth) from the
         // second OS-spawned process into the running instance.
-        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}));
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, args, _cwd| {
+            // Do not print argv: it can contain an OAuth authorization code.
+            let has_kitawatch_url = args.iter().any(|arg| arg.starts_with("kitawatch://"));
+            eprintln!(
+                "[kitawatch][oauth] Single-instance activation received (argument_count={}, has_kitawatch_url={})",
+                args.len(),
+                has_kitawatch_url
+            );
+        }));
     }
 
     builder = builder
@@ -43,8 +51,10 @@ pub fn run() {
 
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
-                if let Err(e) = app.deep_link().register_all() {
-                    eprintln!("[kitawatch] warning: failed to register deep links: {e}");
+                match app.deep_link().register_all() {
+                    Ok(()) => eprintln!("[kitawatch][oauth] Deep-link scheme registration completed."),
+                    Err(e) => {
+                    eprintln!("[kitawatch][oauth] warning: failed to register deep links: {e}");
                     // Linux: deep-link registration needs a .desktop file; log but don't fail
                     #[cfg(target_os = "linux")]
                     eprintln!("[kitawatch] hint: on Linux the kitawatch:// scheme requires the .desktop file to be installed (deb does this automatically). If login fails, use the pin-flow at https://anilist.co/api/v2/oauth/pin and paste the token.");
