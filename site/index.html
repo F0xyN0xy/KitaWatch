@@ -205,6 +205,39 @@
 </footer>
 
 <script>
+// If Supabase returns to the site for desktop OAuth, use this same homepage
+// as a lightweight handoff page instead of maintaining a separate callback file.
+const oauthParams = new URLSearchParams(window.location.search);
+const isDiscordOAuthCallback = oauthParams.get('oauth_callback') === 'discord';
+if (isDiscordOAuthCallback) {
+  const code = oauthParams.get('code');
+  const error = oauthParams.get('error');
+  document.body.innerHTML = `
+    <main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#0a0a0f;color:#e4e4e7;font-family:Inter,system-ui,sans-serif;text-align:center">
+      <section style="width:min(100%,440px);padding:32px;box-sizing:border-box;border:1px solid #ffffff18;border-radius:20px;background:#14141d">
+        <h1 style="font-size:26px;font-weight:800;color:white">Return to KitaWatch</h1>
+        <p id="oauth-message" style="color:#c4c4cc;line-height:1.6">Preparing your sign-in…</p>
+        <p id="oauth-status" role="status" aria-live="polite" style="color:#a1a1aa;font-size:14px"></p>
+        <a id="oauth-open" href="kitawatch://auth?provider=discord" style="display:inline-block;margin-top:16px;padding:12px 20px;border-radius:12px;background:#9333ea;color:white;font-weight:700;text-decoration:none" hidden>Open KitaWatch</a>
+      </section>
+    </main>`;
+  // Remove OAuth query values from the visible address/history as soon as read.
+  window.history.replaceState(null, '', window.location.pathname);
+  const message = document.getElementById('oauth-message');
+  const status = document.getElementById('oauth-status');
+  const openLink = document.getElementById('oauth-open');
+  if (error || !code) {
+    message.textContent = 'Sign-in could not be completed.';
+    status.textContent = 'Return to KitaWatch and try connecting Discord again.';
+  } else {
+    const callback = 'kitawatch://auth?provider=discord&code=' + encodeURIComponent(code);
+    openLink.href = callback;
+    openLink.hidden = false;
+    message.textContent = 'Discord authorization is complete.';
+    status.textContent = 'Opening KitaWatch… If it does not open, use the button below.';
+    window.location.href = callback;
+  }
+} else {
 // Resolve download links from the latest GitHub release (no hardcoded versions)
 const REPO = 'F0xyN0xy/KitaWatch';
 const MATCHERS = {
@@ -233,6 +266,7 @@ fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
     document.getElementById('ver').textContent = '?';
     document.getElementById('ver2').textContent = 'see GitHub Releases';
   });
+}
 </script>
 </body>
 </html>

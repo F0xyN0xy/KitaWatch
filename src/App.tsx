@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { completeLogin, isLoginPending } from '@/services/authFlow';
+import { completeDiscordOAuth } from '@/services/discordAuth';
 import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { Download, X } from 'lucide-react';
@@ -21,22 +22,68 @@ const TermsPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.T
 const PrivacyPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.PrivacyPage })));
 const DmcaPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.DmcaPage })));
 
-/** kitawatch://auth?code=... — finish the OAuth handshake. */
+/** Prevent the native and plugin listeners from exchanging the same one-time code twice. */
+const processedAuthCodes = new Set<string>();
+
+/** kitawatch://auth?code=... — finish the OAuth handshake. Never log callback URLs or codes. */
 async function handleAuthUrl(rawUrl: string) {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch {
+    console.warn('[kitawatch][oauth] Ignored an invalid deep-link URL.');
     return;
   }
-  if (url.hostname !== 'auth') return;
+
+  const provider = url.searchParams.get('provider');
+  const hasCode = Boolean(url.searchParams.get('code'));
+  console.info('[kitawatch][oauth] Deep-link received', {
+    protocol: url.protocol,
+    host: url.hostname,
+    provider: provider ?? '(missing)',
+    hasCode,
+    queryKeys: Array.from(url.searchParams.keys()),
+  });
+
+  if (url.protocol !== 'kitawatch:' || url.hostname !== 'auth') {
+    console.warn('[kitawatch][oauth] Ignored a deep link with an unexpected scheme or host.');
+    return;
+  }
   const code = url.searchParams.get('code');
-  if (!code) return;
+  if (!code) {
+    console.warn('[kitawatch][oauth] Callback has no authorization code.');
+    return;
+  }
+
+  if (processedAuthCodes.has(code)) {
+    console.info('[kitawatch][oauth] Ignored a duplicate callback code.');
+    return;
+  }
+  processedAuthCodes.add(code);
 
   try {
+    if (provider === 'discord') {
+      console.info('[kitawatch][oauth] Starting Discord code exchange.');
+      const completed = await completeDiscordOAuth(rawUrl);
+      console.info('[kitawatch][oauth] Discord code exchange finished', { completed });
+      if (!completed) {
+        console.warn('[kitawatch][oauth] Discord callback parser rejected the callback.');
+      }
+      return;
+    }
+    console.info('[kitawatch][oauth] Starting AniList code exchange.');
     await completeLogin(`kitawatch://auth?code=${code}`);
-  } catch (e) {
-    console.error('[kitawatch] AniList login failed:', e);
+    console.info('[kitawatch][oauth] AniList code exchange finished.');
+  } catch (error) {
+    // Permit a retry if the exchange failed; successful one-time codes stay deduplicated.
+    processedAuthCodes.delete(code);
+    // Log the error type only: provider errors can contain sensitive callback data.
+    console.error(
+      provider === 'discord'
+        ? '[kitawatch][oauth] Discord code exchange failed.'
+        : '[kitawatch][oauth] AniList code exchange failed.',
+      { errorType: error instanceof Error ? error.name : typeof error },
+    );
   }
 }
 
@@ -51,25 +98,46 @@ export default function App() {
     // Restore saved fullscreen state (no-op outside Tauri).
     void initWindowState();
 
+    console.info('[kitawatch][oauth] Initializing deep-link listeners.');
     import('@tauri-apps/plugin-deep-link')
       .then(async (m) => {
         if (disposed) return;
         const current = await m.getCurrent();
-        current?.forEach(handleAuthUrl);
-        const un = await m.onOpenUrl((urls) => urls.forEach(handleAuthUrl));
+        console.info('[kitawatch][oauth] Startup deep-link lookup finished', {
+          hasCurrentUrl: Boolean(current?.length),
+          urlCount: current?.length ?? 0,
+        });
+        current?.forEach((url) => void handleAuthUrl(url));
+        const un = await m.onOpenUrl((urls) => {
+          console.info('[kitawatch][oauth] Deep-link plugin event received', { urlCount: urls.length });
+          urls.forEach((url) => void handleAuthUrl(url));
+        });
         cleanups.push(un);
+        console.info('[kitawatch][oauth] Deep-link plugin listener registered.');
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[kitawatch][oauth] Deep-link plugin initialization failed.', {
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+      });
 
     import('@tauri-apps/api/event')
       .then(async () => {
         if (disposed) return;
-        const un = await listen<string[]>('deep-link://new-url', (e) =>
-          e.payload?.forEach(handleAuthUrl),
-        );
+        const un = await listen<string[]>('deep-link://new-url', (e) => {
+          console.info('[kitawatch][oauth] Native deep-link event received', {
+            urlCount: e.payload?.length ?? 0,
+          });
+          e.payload?.forEach((url) => void handleAuthUrl(url));
+        });
         cleanups.push(un);
+        console.info('[kitawatch][oauth] Native deep-link event listener registered.');
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error('[kitawatch][oauth] Native event listener registration failed.', {
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+      });
 
     const poll = setInterval(() => {
       if (!isLoginPending() || disposed) return;
