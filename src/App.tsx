@@ -22,6 +22,9 @@ const TermsPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.T
 const PrivacyPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.PrivacyPage })));
 const DmcaPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.DmcaPage })));
 
+/** Prevent the native and plugin listeners from exchanging the same one-time code twice. */
+const processedAuthCodes = new Set<string>();
+
 /** kitawatch://auth?code=... — finish the OAuth handshake. Never log callback URLs or codes. */
 async function handleAuthUrl(rawUrl: string) {
   let url: URL;
@@ -52,6 +55,12 @@ async function handleAuthUrl(rawUrl: string) {
     return;
   }
 
+  if (processedAuthCodes.has(code)) {
+    console.info('[kitawatch][oauth] Ignored a duplicate callback code.');
+    return;
+  }
+  processedAuthCodes.add(code);
+
   try {
     if (provider === 'discord') {
       console.info('[kitawatch][oauth] Starting Discord code exchange.');
@@ -66,6 +75,8 @@ async function handleAuthUrl(rawUrl: string) {
     await completeLogin(`kitawatch://auth?code=${code}`);
     console.info('[kitawatch][oauth] AniList code exchange finished.');
   } catch (error) {
+    // Permit a retry if the exchange failed; successful one-time codes stay deduplicated.
+    processedAuthCodes.delete(code);
     // Log the error type only: provider errors can contain sensitive callback data.
     console.error(
       provider === 'discord'
