@@ -404,7 +404,7 @@ export default function Settings() {
       </Section>
 
       <Section title="About">
-        <p className="text-sm text-zinc-400">KitaWatch v2.0.0</p>
+        <p className="text-sm text-zinc-400">KitaWatch v2.0.1</p>
         <div className="flex flex-wrap gap-2">
           <a
             href="https://github.com/F0xyN0xy/KitaWatch/issues"

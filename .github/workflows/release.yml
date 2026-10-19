@@ -46,11 +46,22 @@ jobs:
           python -m pip install -r api/anime-api/requirements.txt
           python -m pip install -r proxy/requirements.txt
 
-      - name: Write bundled .env from secrets
+      - name: Write build environment
         shell: bash
+        env:
+          ANILIST_CLIENT_ID: ${{ secrets.ANILIST_CLIENT_ID }}
+          ANILIST_CLIENT_SECRET: ${{ secrets.ANILIST_CLIENT_SECRET }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: |
+          # Vite reads this file when building the frontend.
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' \
+            "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" > .env
+
+          # Rust-side configuration.
           printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=kitawatch://auth\n' \
-            "${{ secrets.ANILIST_CLIENT_ID }}" "${{ secrets.ANILIST_CLIENT_SECRET }}" > src-tauri/.env
+            "$ANILIST_CLIENT_ID" "$ANILIST_CLIENT_SECRET" > src-tauri/.env
+
 
       - name: Install Anivexa deps
         run: npm install --prefix api/anivexa
