@@ -14,7 +14,7 @@ pub fn run() {
         // single-instance MUST be the first plugin — with its "deep-link"
         // feature it forwards OAuth callbacks (kitawatch://auth) from the
         // second OS-spawned process into the running instance.
-        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // Do not print argv: it can contain an OAuth authorization code.
             let has_kitawatch_url = args.iter().any(|arg| arg.starts_with("kitawatch://"));
             eprintln!(
@@ -22,6 +22,18 @@ pub fn run() {
                 args.len(),
                 has_kitawatch_url
             );
+
+            // A deep link may activate an already-running instance instead of
+            // launching a new window. Explicitly bring the main window forward.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                if let Err(error) = window.set_focus() {
+                    eprintln!("[kitawatch][oauth] Could not focus main window: {error}");
+                }
+            } else {
+                eprintln!("[kitawatch][oauth] Main window was not available during activation.");
+            }
         }));
     }
 
