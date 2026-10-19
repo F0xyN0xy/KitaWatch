@@ -7,7 +7,7 @@ export interface Viewer {
   avatar?: string;
 }
 
-export const DEFAULT_REDIRECT = 'kitawatch://auth';
+export const DEFAULT_REDIRECT = 'https://kitawatch.free.nf/?oauth_callback=anilist';
 /** Pin flow: register this on anilist.co, paste the shown token in Settings. */
 export const PIN_REDIRECT = 'https://anilist.co/api/v2/oauth/pin';
 
