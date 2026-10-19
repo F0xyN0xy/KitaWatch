@@ -59,7 +59,7 @@ jobs:
             "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" > .env
 
           # Rust-side configuration.
-          printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=kitawatch://auth\n' \
+          printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=https://kitawatch.free.nf/?oauth_callback=anilist\n' \
             "$ANILIST_CLIENT_ID" "$ANILIST_CLIENT_SECRET" > src-tauri/.env
 
 
