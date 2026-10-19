@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
 <title>KitaWatch — Desktop Anime Streaming</title>
 <meta name="description" content="KitaWatch: a local-first, cross-platform desktop anime streaming client. No accounts, no servers, no ads — automatic updates." />
 <meta property="og:type" content="website" />
@@ -208,8 +209,9 @@
 // If Supabase returns to the site for desktop OAuth, use this same homepage
 // as a lightweight handoff page instead of maintaining a separate callback file.
 const oauthParams = new URLSearchParams(window.location.search);
-const isDiscordOAuthCallback = oauthParams.get('oauth_callback') === 'discord';
-if (isDiscordOAuthCallback) {
+const oauthProvider = oauthParams.get('oauth_callback');
+const isOAuthCallback = oauthProvider === 'discord' || oauthProvider === 'anilist';
+if (isOAuthCallback) {
   const code = oauthParams.get('code');
   const error = oauthParams.get('error');
   document.body.innerHTML = `
@@ -230,10 +232,10 @@ if (isDiscordOAuthCallback) {
     message.textContent = 'Sign-in could not be completed.';
     status.textContent = 'Return to KitaWatch and try connecting Discord again.';
   } else {
-    const callback = 'kitawatch://auth?provider=discord&code=' + encodeURIComponent(code);
+    const callback = 'kitawatch://auth?provider=' + encodeURIComponent(oauthProvider) + '&code=' + encodeURIComponent(code);
     openLink.href = callback;
     openLink.hidden = false;
-    message.textContent = 'Discord authorization is complete.';
+    message.textContent = 'Authorization is complete.';
     status.textContent = 'Opening KitaWatch… If it does not open, use the button below.';
     window.location.href = callback;
   }
