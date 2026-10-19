@@ -42,7 +42,7 @@ export async function startDiscordOAuth(): Promise<void> {
   const { data, error } = await client.auth.signInWithOAuth({
     provider: 'discord',
     options: {
-      redirectTo: 'https://kitawatch.free.nf/auth/callback/',
+      redirectTo: 'kitawatch://auth?provider=discord',
       scopes: 'identify',
       skipBrowserRedirect: true,
     },
