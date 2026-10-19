@@ -54,10 +54,11 @@ pub fn run() {
                 match app.deep_link().register_all() {
                     Ok(()) => eprintln!("[kitawatch][oauth] Deep-link scheme registration completed."),
                     Err(e) => {
-                    eprintln!("[kitawatch][oauth] warning: failed to register deep links: {e}");
-                    // Linux: deep-link registration needs a .desktop file; log but don't fail
-                    #[cfg(target_os = "linux")]
-                    eprintln!("[kitawatch] hint: on Linux the kitawatch:// scheme requires the .desktop file to be installed (deb does this automatically). If login fails, use the pin-flow at https://anilist.co/api/v2/oauth/pin and paste the token.");
+                        eprintln!("[kitawatch][oauth] warning: failed to register deep links: {e}");
+                        // Linux: deep-link registration needs a .desktop file; log but don't fail.
+                        #[cfg(target_os = "linux")]
+                        eprintln!("[kitawatch] hint: on Linux, the kitawatch:// scheme requires the .desktop file to be installed (the deb package does this automatically).");
+                    }
                 }
             }
 
