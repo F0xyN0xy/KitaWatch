@@ -8,7 +8,10 @@ export const ANILIST_CLIENT_ID = '34664';
 export const OAUTH_AUTHORIZE = 'https://anilist.co/api/v2/oauth/authorize';
 /** Redirect URI — must exactly match the AniList client's registered URL. */
 export function getRedirectUri(): string {
-  return useAuthStore.getState().anilistRedirect?.trim() || DEFAULT_REDIRECT;
+  const configured = useAuthStore.getState().anilistRedirect?.trim();
+  // Migrate the previous desktop-scheme default for existing persisted settings.
+  if (!configured || configured === 'kitawatch://auth') return DEFAULT_REDIRECT;
+  return configured;
 }
 
 export class AniListError extends Error {}
@@ -385,13 +388,12 @@ export async function startAniListOAuth(): Promise<void> {
  * fallback so the installed app works where no .env exists.
  */
 export async function exchangeAuthCode(code: string): Promise<string> {
-  const { anilistRedirect } = useAuthStore.getState();
   try {
     return await invoke<string>('exchange_anilist_token', {
       code,
       clientId: ANILIST_CLIENT_ID,
       clientSecret: null,
-      redirectUri: anilistRedirect || null,
+      redirectUri: getRedirectUri(),
     });
   } catch (e) {
     throw new AniListError(e instanceof Error ? e.message : String(e));
