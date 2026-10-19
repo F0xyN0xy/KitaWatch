@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { completeLogin, isLoginPending } from '@/services/authFlow';
+import { completeDiscordOAuth } from '@/services/discordAuth';
 import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { Download, X } from 'lucide-react';
@@ -30,13 +31,21 @@ async function handleAuthUrl(rawUrl: string) {
     return;
   }
   if (url.hostname !== 'auth') return;
+  const provider = url.searchParams.get('provider');
   const code = url.searchParams.get('code');
   if (!code) return;
 
   try {
+    if (provider === 'discord') {
+      await completeDiscordOAuth(rawUrl);
+      return;
+    }
     await completeLogin(`kitawatch://auth?code=${code}`);
   } catch (e) {
-    console.error('[kitawatch] AniList login failed:', e);
+    console.error(
+      provider === 'discord' ? '[kitawatch] Discord login failed:' : '[kitawatch] AniList login failed:',
+      e,
+    );
   }
 }
 
