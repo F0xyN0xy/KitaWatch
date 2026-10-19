@@ -230,7 +230,7 @@ if (isOAuthCallback) {
   const openLink = document.getElementById('oauth-open');
   if (error || !code) {
     message.textContent = 'Sign-in could not be completed.';
-    status.textContent = 'Return to KitaWatch and try connecting Discord again.';
+    status.textContent = 'Return to KitaWatch and try signing in again.';
   } else {
     const callback = 'kitawatch://auth?provider=' + encodeURIComponent(oauthProvider) + '&code=' + encodeURIComponent(code);
     openLink.href = callback;
