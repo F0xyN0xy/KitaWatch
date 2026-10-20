@@ -129,8 +129,8 @@ async def cors(u: str = Query(...), ref: str | None = None, request: object = No
         print(f"[proxy error] {e}")
         return JSONResponse(
             {
-                "error": "All configured AnimePahe mirrors failed",
-                "details": last_err,
+                "error": "Proxy request failed",
+                "details": str(e),
             },
             status_code=502,
         )
