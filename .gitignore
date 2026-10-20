@@ -25,3 +25,4 @@ binaries*
 build
 _kitawatch_entry.py
 proxy.*
+.prettierrc.json
