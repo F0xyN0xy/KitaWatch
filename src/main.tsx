@@ -6,6 +6,18 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './styles/globals.css';
 
+const currentTauriWindow = isTauri() ? getCurrentWindow() : null;
+const isMainWindow = !currentTauriWindow || currentTauriWindow.label === 'main';
+
+// A dev-server fallback must never mount a second React app inside the splash window.
+if (isMainWindow) {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>,
+  );
+}
+
 if (import.meta.env.DEV && typeof performance !== 'undefined') {
   performance.mark('kitawatch:react-entry');
   const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
@@ -13,29 +25,17 @@ if (import.meta.env.DEV && typeof performance !== 'undefined') {
   console.debug(`[kitawatch][startup-timing] frontend entry reached in ${entryTime.toFixed(1)}ms`);
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
-    <App />
-  </BrowserRouter>,
-);
-
-if (isTauri()) {
+if (currentTauriWindow?.label === 'main') {
   // The native splash is a separate, lightweight window. Keep it visible while
   // React and its initial route initialize in the hidden main window.
   requestAnimationFrame(() => {
     requestAnimationFrame(async () => {
       try {
-        await getCurrentWindow().show();
+        await currentTauriWindow.show();
         const splash = (await getAllWebviewWindows()).find((window) => window.label === 'splashscreen');
         if (splash) await splash.close();
       } catch (error) {
         console.error('[kitawatch][startup] Could not complete splash handoff.', error);
-        // If closing the splash fails, still try to expose the main app.
-        try {
-          await getCurrentWindow().show();
-        } catch {
-          // The native window manager will report any unrecoverable startup error.
-        }
       }
     });
   });
