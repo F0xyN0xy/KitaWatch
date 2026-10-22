@@ -130,7 +130,6 @@ async def cors(u: str = Query(...), ref: str | None = None, request: object = No
         return JSONResponse(
             {
                 "error": "Proxy request failed",
-                "details": str(e),
             },
             status_code=502,
         )
