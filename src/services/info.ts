@@ -5,58 +5,113 @@ import type { AnimeInfo } from '@/types';
 /**
  * Shared anime-info fetcher for the detail/watch pages.
  *
- * Two problems this solves:
- *  - "Opens the episode without info, have to go back first": every mount
- *    re-fetched info from scratch, so the watch page sat half-empty until
- *    the request resolved. Now a per-session cache serves the info
- *    instantly on any revisit (episode switches, back-and-forth), with a
- *    quiet background refresh to pick up changes.
- *  - Rate limiting: the old code raced `api.info` and `anilist.info` in
- *    PARALLEL on every page — two AniList hits per open, multiplied by
- *    every navigation. Now AniList is queried first (one hit) and the
- *    local Kuhi API is only contacted as a fallback or to fill in the
- *    episode list when AniList doesn't carry one.
+ * AniList is queried first; the local Kuhi API is the network fallback.
+ * Successful results are also persisted locally so a temporary AniList/Kuhi
+ * outage doesn't leave previously viewed anime without metadata after restart.
+ * Cached data is stale-while-revalidate: it renders immediately and refreshes
+ * quietly in the background.
  *
  * Concurrent callers for the same id share a single in-flight request.
  */
+
+const STORAGE_KEY = 'kitawatch-anime-info-cache-v1';
+const MAX_PERSISTED_ENTRIES = 100;
+
+interface PersistedEntry {
+  savedAt: number;
+  data: AnimeInfo;
+}
 
 const cache = new Map<string, AnimeInfo>();
 const inflight = new Map<string, Promise<AnimeInfo>>();
 const refreshing = new Set<string>();
 
-/** AniList first (one request); Kuhi only covers outages. */
+/** localStorage may be unavailable in restricted webviews; cache is optional. */
+function readPersistedCache(id: string): AnimeInfo | undefined {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return undefined;
+    const entries = JSON.parse(raw) as Record<string, PersistedEntry>;
+    const entry = entries[id];
+    if (
+      !entry ||
+      !entry.data ||
+      Number(entry.data.id) !== Number(id) ||
+      typeof entry.data.title !== 'string' ||
+      !entry.data.title.trim()
+    ) {
+      return undefined;
+    }
+    return entry.data;
+  } catch {
+    return undefined;
+  }
+}
+
+function writePersistedCache(id: string, data: AnimeInfo): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const entries = raw ? (JSON.parse(raw) as Record<string, PersistedEntry>) : {};
+    entries[id] = { savedAt: Date.now(), data };
+
+    // Keep the most recently updated records to bound storage growth.
+    const retained = Object.entries(entries)
+      .filter(([, entry]) => entry && typeof entry.savedAt === 'number' && entry.data)
+      .sort((a, b) => b[1].savedAt - a[1].savedAt)
+      .slice(0, MAX_PERSISTED_ENTRIES);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(retained)));
+  } catch {
+    // A full or unavailable storage area must never break metadata loading.
+  }
+}
+
+/** AniList first; Kuhi is the fallback when GraphQL is unavailable. */
 const loadFresh = (id: string) => anilist.info(id).catch(() => api.info(id));
 
+function refreshQuietly(id: string): void {
+  if (refreshing.has(id)) return;
+  refreshing.add(id);
+  void loadFresh(id)
+    .then((data) => {
+      cache.set(id, data);
+      writePersistedCache(id, data);
+    })
+    .catch(() => {
+      // Keep the last successful copy when both upstreams are unavailable.
+    })
+    .finally(() => refreshing.delete(id));
+}
+
 export function fetchAnimeInfo(id: string): Promise<AnimeInfo> {
-  const hit = cache.get(id);
-  if (hit) {
-    // Stale-while-revalidate: return immediately, refresh quietly. The
-    // refresh is fire-and-forget (guarded by `refreshing`, not `inflight`,
-    // so its type stays Promise<void> and never touches the typed map).
-    if (!refreshing.has(id)) {
-      refreshing.add(id);
-      void loadFresh(id)
-        .then((i) => {
-          cache.set(id, i);
-        })
-        .catch(() => {})
-        .finally(() => refreshing.delete(id));
-    }
-    return Promise.resolve(hit);
+  const memoryHit = cache.get(id);
+  if (memoryHit) {
+    refreshQuietly(id);
+    return Promise.resolve(memoryHit);
   }
+
+  const persistedHit = readPersistedCache(id);
+  if (persistedHit) {
+    cache.set(id, persistedHit);
+    refreshQuietly(id);
+    return Promise.resolve(persistedHit);
+  }
+
   const existing = inflight.get(id);
   if (existing) return existing;
-  const p = loadFresh(id)
-    .then((i) => {
-      cache.set(id, i);
-      return i;
+
+  const request = loadFresh(id)
+    .then((data) => {
+      cache.set(id, data);
+      writePersistedCache(id, data);
+      return data;
     })
     .finally(() => inflight.delete(id));
-  inflight.set(id, p);
-  return p;
+
+  inflight.set(id, request);
+  return request;
 }
 
 /** Synchronous cache peek — for places that want to render before fetching. */
 export function peekAnimeInfo(id: string): AnimeInfo | undefined {
-  return cache.get(id);
+  return cache.get(id) ?? readPersistedCache(id);
 }
