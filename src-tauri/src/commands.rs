@@ -48,7 +48,9 @@ pub async fn exchange_anilist_token(
 
     let cid = env_or("ANILIST_CLIENT_ID", client_id);
     let csec = env_or("ANILIST_CLIENT_SECRET", client_secret);
-    let ruri = env_or("ANILIST_REDIRECT_URI", redirect_uri);
+    let ruri = redirect_uri
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| env_or("ANILIST_REDIRECT_URI", None));
 
     if cid.is_empty() || csec.is_empty() {
         eprintln!("[kitawatch] anilist token exchange: missing credentials (cid_empty={}, csec_empty={})", cid.is_empty(), csec.is_empty());

@@ -1,6 +1,6 @@
 import type { AnimeInfo, AnimeSummary } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
-import { useAuthStore, DEFAULT_REDIRECT } from '@/stores/authStore';
+import { DEFAULT_REDIRECT } from '@/stores/authStore';
 
 const API_URL = 'https://graphql.anilist.co';
 /** Public OAuth client ID — identifies the app; users still log in with THEIR account. */
@@ -8,10 +8,7 @@ export const ANILIST_CLIENT_ID = '34664';
 export const OAUTH_AUTHORIZE = 'https://anilist.co/api/v2/oauth/authorize';
 /** Redirect URI — must exactly match the AniList client's registered URL. */
 export function getRedirectUri(): string {
-  const configured = useAuthStore.getState().anilistRedirect?.trim();
-  // Migrate the previous desktop-scheme default for existing persisted settings.
-  if (!configured || configured === 'https://kitawatch.free.nf/?oauth_callback=anilist') return DEFAULT_REDIRECT;
-  return configured;
+  return DEFAULT_REDIRECT;
 }
 
 export class AniListError extends Error {}
