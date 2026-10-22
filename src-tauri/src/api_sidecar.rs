@@ -520,11 +520,35 @@ fn kill_stragglers() {
 fn kill_stragglers() {}
 
 pub fn start(app: &tauri::App) -> Sidecars {
+    let startup_started = std::time::Instant::now();
+
+    let cleanup_started = std::time::Instant::now();
     kill_stragglers();
+    eprintln!(
+        "[kitawatch][startup-timing] stale-process cleanup: {:?}",
+        cleanup_started.elapsed()
+    );
+
     // make sure the log dir exists even in dev, so the debug report and any
     // KITAWATCH_LOG_DIR-aware child always have a valid target
+    let log_started = std::time::Instant::now();
     let _ = std::fs::create_dir_all(log_dir(app));
+    eprintln!(
+        "[kitawatch][startup-timing] log directory setup: {:?}",
+        log_started.elapsed()
+    );
+
+    let sidecar_started = std::time::Instant::now();
     let procs = imp::start(app);
+    eprintln!(
+        "[kitawatch][startup-timing] sidecar spawn checks: {:?}",
+        sidecar_started.elapsed()
+    );
+    eprintln!(
+        "[kitawatch][startup-timing] total sidecar setup: {:?}",
+        startup_started.elapsed()
+    );
+
     Sidecars { procs }
 }
 
