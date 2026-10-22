@@ -12,24 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "splashscreen",
-        "title": "KitaWatch",
-        "url": "splashscreen.html",
-        "width": 420,
-        "height": 280,
-        "center": true,
-        "resizable": false,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "visible": true,
-        "backgroundColor": [
-          10,
-          10,
-          15,
-          255
-        ]
-      },
-      {
         "label": "main",
         "title": "KitaWatch",
         "width": 1280,
@@ -44,8 +26,7 @@
           15,
           255
         ],
-        "url": "index.html",
-        "visible": false
+        "url": "index.html"
       }
     ],
     "security": {
