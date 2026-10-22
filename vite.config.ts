@@ -18,5 +18,12 @@ export default defineConfig({
   },
   build: {
     target: 'es2021',
+    // Build the minimal splash as a separate HTML entry so it does not load React.
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        splashscreen: fileURLToPath(new URL('./splashscreen.html', import.meta.url)),
+      },
+    },
   },
 });
