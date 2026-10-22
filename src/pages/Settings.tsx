@@ -13,6 +13,7 @@ import { completeLogin, markLoginPending, setAuthNotifier } from '@/services/aut
 import { getDebugReport } from '@/services/debug';
 import { setFullscreenRemember } from '@/services/windowState';
 import DiscordAccount from '@/components/DiscordAccount';
+import ProviderStatusPanel from '@/components/ProviderStatusPanel';
 
 const QUALITIES: Quality[] = ['auto', '1080p', '720p', '480p'];
 
@@ -327,6 +328,8 @@ export default function Settings() {
       </Section>
 
       <DiscordAccount />
+
+      <ProviderStatusPanel />
 
       <Section title="Discord Activity">
         <div className="flex items-center justify-between gap-4">
