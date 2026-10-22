@@ -179,7 +179,7 @@ mod imp {
         }
     }
 
-    pub fn start(app: &tauri::App) -> Vec<(&'static str, Proc)> {
+    pub fn start(app: &tauri::AppHandle) -> Vec<(&'static str, Proc)> {
         let mut procs = Vec::new();
         let logs = super::log_dir(app);
 
@@ -231,7 +231,7 @@ mod imp {
     /// the target-triple suffix (it strips it at bundle time), so check the
     /// plain name first; the triple-suffixed variant is a fallback.
     /// On Linux also check the Tauri resource dir (deb/appimage layouts).
-    fn bundled_exe_with_app(name: &str, app: &tauri::App) -> Option<PathBuf> {
+    fn bundled_exe_with_app(name: &str, app: &tauri::AppHandle) -> Option<PathBuf> {
         let ext = if cfg!(windows) { ".exe" } else { "" };
         let plain = format!("{name}{ext}");
         let tripled = format!("{name}-{SIDE_TRIPLE}{ext}");
@@ -409,7 +409,7 @@ mod imp {
         }
     }
 
-    pub fn start(app: &tauri::App) -> Vec<(&'static str, Proc)> {
+    pub fn start(app: &tauri::AppHandle) -> Vec<(&'static str, Proc)> {
         let mut procs = Vec::new();
         let logs = super::log_dir(app);
 
@@ -519,7 +519,7 @@ fn kill_stragglers() {
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 fn kill_stragglers() {}
 
-pub fn start(app: &tauri::App) -> Sidecars {
+pub fn start(app: &tauri::AppHandle) -> Sidecars {
     let startup_started = std::time::Instant::now();
 
     let cleanup_started = std::time::Instant::now();
