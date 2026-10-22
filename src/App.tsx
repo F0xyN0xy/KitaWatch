@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { listen } from '@tauri-apps/api/event';
@@ -89,6 +89,16 @@ async function handleAuthUrl(rawUrl: string) {
 
 export default function App() {
   const location = useLocation();
+  const watchMatch = location.pathname.match(/^\/watch\/([^/]+)\/([^/]+)\/?$/);
+  const currentWatchRoute = watchMatch ? { id: watchMatch[1], episode: watchMatch[2] } : null;
+  const [lastWatchRoute, setLastWatchRoute] = useState<{ id: string; episode: string } | null>(null);
+  const isWatchRoute = currentWatchRoute !== null;
+  const playerRoute = currentWatchRoute ?? lastWatchRoute;
+
+  useEffect(() => {
+    if (currentWatchRoute) setLastWatchRoute(currentWatchRoute);
+  }, [location.pathname]);
+
   const { state: updater, install, dismiss } = useUpdater();
 
   useEffect(() => {
@@ -172,7 +182,7 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/browse" element={<Browse />} />
                 <Route path="/anime/:id" element={<Detail />} />
-                <Route path="/watch/:id/:episode" element={<Watch />} />
+                <Route path="/watch/:id/:episode" element={<div />} />
                 <Route path="/my-list" element={<MyList />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/terms" element={<TermsPage />} />
@@ -182,6 +192,21 @@ export default function App() {
               </Routes>
             </AnimatePresence>
           </Suspense>
+          {playerRoute && (
+            <Suspense fallback={null}>
+              <div
+                className={
+                  isWatchRoute
+                    ? 'relative flex min-h-0 flex-1 flex-col'
+                    : 'pointer-events-none fixed inset-0 z-0 flex flex-col opacity-0'
+                }
+                aria-hidden={!isWatchRoute}
+                inert={!isWatchRoute}
+              >
+                <Watch id={playerRoute.id} episode={playerRoute.episode} />
+              </div>
+            </Suspense>
+          )}
         </ErrorBoundary>
       </div>
       {/* Update banner */}
