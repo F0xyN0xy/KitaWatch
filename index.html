@@ -60,19 +60,32 @@
         color: #a1a1aa;
         font-size: 12px;
       }
-      #startup-screen .startup-spinner {
-        width: 12px;
-        height: 12px;
-        border: 2px solid rgba(168, 85, 247, 0.25);
-        border-top-color: #c084fc;
-        border-radius: 50%;
-        animation: startup-spin 800ms linear infinite;
+      #startup-screen .startup-progress {
+        width: 220px;
+        max-width: 65vw;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(168, 85, 247, 0.18);
       }
-      @keyframes startup-spin {
-        to { transform: rotate(360deg); }
+      #startup-screen .startup-progress-bar {
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #a855f7, #d8b4fe);
+        animation: startup-progress 1.35s ease-in-out infinite;
+      }
+      @keyframes startup-progress {
+        0% { transform: translateX(-110%); }
+        50% { transform: translateX(135%); }
+        100% { transform: translateX(260%); }
       }
       @media (prefers-reduced-motion: reduce) {
-        #startup-screen .startup-spinner { animation: none; }
+        #startup-screen .startup-progress-bar {
+          animation: none;
+          width: 100%;
+          opacity: 0.75;
+        }
         #startup-screen { transition: none; }
       }
     </style>
@@ -83,7 +96,10 @@
         <div class="startup-content">
           <div class="startup-mark" aria-hidden="true">K</div>
           <p class="startup-name">KitaWatch</p>
-          <p class="startup-status"><span class="startup-spinner" aria-hidden="true"></span>Starting up…</p>
+          <p class="startup-status">Preparing your library…</p>
+          <div class="startup-progress" role="progressbar" aria-label="Loading KitaWatch">
+            <div class="startup-progress-bar"></div>
+          </div>
         </div>
       </div>
     </div>
