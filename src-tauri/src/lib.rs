@@ -58,8 +58,11 @@ pub fn run() {
             } else {
                 config::load();
             }
-            // Initialize Discord Rich Presence (uses hardcoded KitaWatch app ID)
-            crate::discord::init("1553307716758536202");
+            // Discord IPC can take time to connect when Discord is closed. Keep it
+            // off the native setup path so it cannot delay the first app window.
+            std::thread::spawn(|| {
+                crate::discord::init("1553307716758536202");
+            });
 
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
