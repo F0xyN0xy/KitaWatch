@@ -10,7 +10,7 @@ export const OAUTH_AUTHORIZE = 'https://anilist.co/api/v2/oauth/authorize';
 export function getRedirectUri(): string {
   const configured = useAuthStore.getState().anilistRedirect?.trim();
   // Migrate the previous desktop-scheme default for existing persisted settings.
-  if (!configured || configured === 'kitawatch://auth') return DEFAULT_REDIRECT;
+  if (!configured || configured === 'https://kitawatch.free.nf/?oauth_callback=anilist') return DEFAULT_REDIRECT;
   return configured;
 }
 

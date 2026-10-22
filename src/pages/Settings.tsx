@@ -192,7 +192,7 @@ export default function Settings() {
             <div className="rounded-lg bg-ink-800/60 p-3 ring-1 ring-white/5">
               <p className="mb-2 text-xs text-zinc-500">
                 Trouble? After approving in the browser, paste the callback URL
-                (<code>kitawatch://auth?code=...</code>) — or the raw token from{' '}
+                (<code>https://kitawatch.free.nf/?oauth_callback=anilist?code=...</code>) — or the raw token from{' '}
                 <code>https://anilist.co/api/v2/oauth/pin</code> — here:
               </p>
               <div className="flex gap-2">
