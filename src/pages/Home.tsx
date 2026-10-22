@@ -52,17 +52,15 @@ function Hero({ anime }: { anime: SpotlightAnime }) {
 }
 
 export default function Home() {
-  // Keep the native splash visible until the initial library route has committed.
-  // API requests can continue behind the skeleton UI after the main window appears.
+  // Measure the initial library route during development.
   useEffect(() => {
-    if (typeof performance !== 'undefined') {
+    if (import.meta.env.DEV && typeof performance !== 'undefined') {
       performance.mark('kitawatch:home-committed');
       const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
       console.debug(
         `[kitawatch][startup-timing] Home route committed in ${(performance.now() - navigationStart).toFixed(1)}ms`,
       );
     }
-    window.dispatchEvent(new Event('kitawatch:app-ready'));
   }, []);
 
   const spotlight = useApi(api.spotlight, [], { retries: 8 });
