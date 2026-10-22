@@ -19,7 +19,13 @@
         "minWidth": 960,
         "minHeight": 600,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "backgroundColor": [
+          10,
+          10,
+          15,
+          255
+        ]
       }
     ],
     "security": {
