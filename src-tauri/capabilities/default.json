@@ -12,6 +12,6 @@
     "shell:default",
     "shell:allow-spawn",
     "shell:allow-kill",
-    "updater:default",
+    "updater:default"
   ]
 }
