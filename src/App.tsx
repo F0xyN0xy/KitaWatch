@@ -105,9 +105,9 @@ export default function App() {
 
   const { state: updater, install, dismiss } = useUpdater();
 
-  // Measure the shared shell separately; Home signals when the initial library route commits.
+  // Measure the shared shell during development without adding production console noise.
   useEffect(() => {
-    if (typeof performance !== 'undefined') {
+    if (import.meta.env.DEV && typeof performance !== 'undefined') {
       performance.mark('kitawatch:app-shell-committed');
       const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
       console.debug(
