@@ -17,8 +17,8 @@ if (import.meta.env.DEV && typeof performance !== 'undefined') {
   );
 }
 
-// Register before React renders so the first committed app shell can trigger
-// the native splash handoff. A timer can expose about:blank before React commits.
+// Register before React renders; Home triggers the handoff after the library route commits.
+// A timer can expose about:blank before the initial UI is ready.
 if (currentTauriWindow?.label === 'main') {
   const onAppReady = async () => {
     window.removeEventListener('kitawatch:app-ready', onAppReady);
@@ -52,7 +52,7 @@ if (isMainWindow) {
 }
 
 // Approximate when the frontend's first render frame is reached in development.
-// The actual native-window handoff is driven by App's post-commit effect above.
+// The native-window handoff waits for the initial Home route to commit.
 if (import.meta.env.DEV && isMainWindow && typeof performance !== 'undefined') {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
