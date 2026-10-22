@@ -115,7 +115,6 @@ export default function App() {
         `[kitawatch][startup-timing] React app shell committed in ${(performance.now() - navigationStart).toFixed(1)}ms`,
       );
     }
-    window.dispatchEvent(new Event('kitawatch:app-ready'));
   }, []);
 
   useEffect(() => {
