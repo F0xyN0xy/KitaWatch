@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import VideoPlayer from '@/components/player/VideoPlayer';
@@ -28,8 +28,12 @@ const fetchInfo = fetchAnimeInfo;
 /** Identity of a source — survives list re-sorts and background merges. */
 const sourceKey = (s: StreamSource) => `${s.server ?? 'src'}|${s.url}`;
 
-export default function Watch() {
-  const { id, episode } = useParams<{ id: string; episode: string }>();
+interface WatchProps {
+  id: string;
+  episode: string;
+}
+
+export default function Watch({ id, episode }: WatchProps) {
   const navigate = useNavigate();
   const epNum = Number(episode) || 1;
   const autoplayNext = useSettingsStore((s) => s.autoplayNext);

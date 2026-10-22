@@ -1,5 +1,5 @@
-import { useEffect, lazy, Suspense } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { useEffect, useState, lazy, Suspense } from 'react';
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { listen } from '@tauri-apps/api/event';
 import Sidebar from '@/components/layout/Sidebar';
@@ -89,6 +89,21 @@ async function handleAuthUrl(rawUrl: string) {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const watchMatch = location.pathname.match(/^\/watch\/([^/]+)\/([^/]+)\/?$/);
+  const currentWatchRoute = watchMatch ? { id: watchMatch[1], episode: watchMatch[2] } : null;
+  const [lastWatchRoute, setLastWatchRoute] = useState<{ id: string; episode: string } | null>(null);
+  const [playerDismissed, setPlayerDismissed] = useState(false);
+  const isWatchRoute = currentWatchRoute !== null;
+  const playerRoute = currentWatchRoute ?? (playerDismissed ? null : lastWatchRoute);
+
+  useEffect(() => {
+    if (currentWatchRoute) {
+      setLastWatchRoute(currentWatchRoute);
+      setPlayerDismissed(false);
+    }
+  }, [location.pathname]);
+
   const { state: updater, install, dismiss } = useUpdater();
 
   useEffect(() => {
@@ -172,7 +187,7 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/browse" element={<Browse />} />
                 <Route path="/anime/:id" element={<Detail />} />
-                <Route path="/watch/:id/:episode" element={<Watch />} />
+                <Route path="/watch/:id/:episode" element={<div />} />
                 <Route path="/my-list" element={<MyList />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/terms" element={<TermsPage />} />
@@ -182,6 +197,40 @@ export default function App() {
               </Routes>
             </AnimatePresence>
           </Suspense>
+          {playerRoute && (
+            <Suspense fallback={null}>
+              <div
+                className={
+                  isWatchRoute
+                    ? 'relative flex min-h-0 flex-1 flex-col'
+                    : 'fixed bottom-4 right-4 z-40 flex max-h-[min(460px,calc(100vh-2rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-y-auto rounded-xl bg-ink-950 shadow-2xl ring-1 ring-white/15'
+                }
+              >
+                <div className={isWatchRoute ? 'hidden' : 'sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-ink-900 px-3 py-2'}>
+                  <span className="truncate text-xs font-semibold text-zinc-200">Playing in mini-player</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/watch/${playerRoute.id}/${playerRoute.episode}`)}
+                      className="rounded-md bg-accent-600 px-2 py-1 text-xs font-medium text-white hover:bg-accent-500"
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlayerDismissed(true)}
+                      aria-label="Close mini-player and stop playback"
+                      title="Close mini-player and stop playback"
+                      className="rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <Watch id={playerRoute.id} episode={playerRoute.episode} />
+              </div>
+            </Suspense>
+          )}
         </ErrorBoundary>
       </div>
       {/* Update banner */}
