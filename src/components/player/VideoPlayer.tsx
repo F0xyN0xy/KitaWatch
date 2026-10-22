@@ -362,7 +362,8 @@ function MediaPlayer({
         fullscreen: true,
         playbackRate: true,
         aspectRatio: true,
-        hotkey: true,
+        // KitaWatch handles shortcuts below so behavior is consistent across browsers.
+        hotkey: false,
         ...(subBlobUrl
           ? {
               subtitle: {
@@ -401,6 +402,87 @@ function MediaPlayer({
       instance = created;
       setArt(created);
       const player = created;
+
+      // Use one predictable shortcut map instead of ArtPlayer's built-in hotkeys.
+      // Only handle keys while the pointer or keyboard focus is inside this player.
+      const isEditableTarget = (target: EventTarget | null): boolean => {
+        if (!(target instanceof HTMLElement)) return false;
+        return target.isContentEditable || Boolean(
+          target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]'),
+        );
+      };
+      const onPlayerKeyDown = (event: KeyboardEvent) => {
+        if (
+          event.defaultPrevented ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          isEditableTarget(event.target)
+        ) return;
+
+        const playerRoot = player.template.$player;
+        if (!playerRoot.matches(':hover') && !playerRoot.contains(document.activeElement)) return;
+
+        const key = event.key.toLowerCase();
+        // Space should still activate a focused button in the player controls.
+        if (
+          (key === ' ' || event.code === 'Space') &&
+          event.target instanceof HTMLElement &&
+          event.target.closest('button, a, [role="button"]')
+        ) return;
+
+        let handled = true;
+        switch (key) {
+          case 'f':
+            player.fullscreen = !player.fullscreen;
+            break;
+          case ' ':
+          case 'k':
+            if (player.video.paused) {
+              void player.video.play().catch(() => {
+                /* Playback can be blocked by the webview until user interaction. */
+              });
+            } else {
+              player.video.pause();
+            }
+            break;
+          case 'arrowleft':
+            player.currentTime = Math.max(0, player.currentTime - 5);
+            break;
+          case 'arrowright': {
+            const duration = player.duration;
+            const next = player.currentTime + 5;
+            player.currentTime = Number.isFinite(duration) ? Math.min(duration, next) : next;
+            break;
+          }
+          case 'arrowup':
+            player.muted = false;
+            player.volume = Math.min(1, player.volume + 0.1);
+            break;
+          case 'arrowdown':
+            player.volume = Math.max(0, player.volume - 0.1);
+            break;
+          case 'm':
+            player.muted = !player.muted;
+            break;
+          case 'escape':
+            if (player.fullscreen) {
+              player.fullscreen = false;
+            } else {
+              handled = false;
+            }
+            break;
+          default:
+            handled = false;
+        }
+
+        if (handled) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+      document.addEventListener('keydown', onPlayerKeyDown);
+      disposers.push(() => document.removeEventListener('keydown', onPlayerKeyDown));
 
       // ASS subtitles: render via JASSub (native tracks only do VTT/SRT)
       if (sub && subType === 'ass') {
