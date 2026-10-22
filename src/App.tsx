@@ -1,6 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import { listen } from '@tauri-apps/api/event';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
@@ -106,6 +105,17 @@ export default function App() {
 
   const { state: updater, install, dismiss } = useUpdater();
 
+  // Measure the shared shell during development without adding production console noise.
+  useEffect(() => {
+    if (import.meta.env.DEV && typeof performance !== 'undefined') {
+      performance.mark('kitawatch:app-shell-committed');
+      const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+      console.debug(
+        `[kitawatch][startup-timing] React app shell committed in ${(performance.now() - navigationStart).toFixed(1)}ms`,
+      );
+    }
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     const cleanups: (() => void)[] = [];
@@ -182,8 +192,7 @@ export default function App() {
               </div>
             }
           >
-            <AnimatePresence mode="wait">
-              <Routes location={location} key={location.pathname}>
+            <Routes location={location} key={location.pathname}>
                 <Route path="/" element={<Home />} />
                 <Route path="/browse" element={<Browse />} />
                 <Route path="/anime/:id" element={<Detail />} />
@@ -194,8 +203,7 @@ export default function App() {
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/dmca" element={<DmcaPage />} />
                 <Route path="*" element={<Home />} />
-              </Routes>
-            </AnimatePresence>
+            </Routes>
           </Suspense>
           {playerRoute && (
             <Suspense fallback={null}>

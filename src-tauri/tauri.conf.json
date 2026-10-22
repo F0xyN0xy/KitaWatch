@@ -25,7 +25,8 @@
           10,
           15,
           255
-        ]
+        ],
+        "url": "index.html"
       }
     ],
     "security": {

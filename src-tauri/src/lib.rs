@@ -5,6 +5,11 @@ mod discord;
 mod proc_group;
 use tauri::Manager;
 
+struct SidecarLifecycle {
+    sidecars: Option<api_sidecar::Sidecars>,
+    shutting_down: bool,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -58,8 +63,11 @@ pub fn run() {
             } else {
                 config::load();
             }
-            // Initialize Discord Rich Presence (uses hardcoded KitaWatch app ID)
-            crate::discord::init("1553307716758536202");
+            // Discord IPC can take time to connect when Discord is closed. Keep it
+            // off the native setup path so it cannot delay the first app window.
+            std::thread::spawn(|| {
+                crate::discord::init("1553307716758536202");
+            });
 
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -74,24 +82,45 @@ pub fn run() {
                 }
             }
 
-            // Debug spawns from source checkouts; release spawns the bundled
-            // binaries next to the app exe (windowless on Windows, logged to
-            // the app log dir — launch with `--debug` for consoles).
-            // Every child is wired into proc_group (Windows kill-on-close
-            // job object / Linux pdeathsig), so updates and crashes can
-            // never orphan a sidecar.
-            let sidecars = api_sidecar::start(app);
+            // Tauri runs setup before creating configured windows. Sidecar
+            // cleanup and spawn checks can take over a second, so run them off
+            // this path to let the splash WebView start painting immediately.
+            // Keep the lifecycle state managed now so exit can race safely with
+            // background startup without leaving newly spawned children alive.
+            let sidecar_state = std::sync::Mutex::new(SidecarLifecycle {
+                sidecars: None,
+                shutting_down: false,
+            });
+            app.manage(sidecar_state);
 
-            app.manage(std::sync::Mutex::new(sidecars));
+            let sidecar_app = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut sidecars = api_sidecar::start(&sidecar_app);
+                if let Some(state) = sidecar_app.try_state::<std::sync::Mutex<SidecarLifecycle>>() {
+                    match state.lock() {
+                        Ok(mut state) if !state.shutting_down => {
+                            state.sidecars = Some(sidecars);
+                        }
+                        Ok(_) | Err(_) => {
+                            api_sidecar::stop(&mut sidecars);
+                        }
+                    }
+                } else {
+                    api_sidecar::stop(&mut sidecars);
+                }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building KitaWatch")
         .run(move |app_handle, event| {
             if let tauri::RunEvent::Exit = event {
-                if let Some(mutex) = app_handle.try_state::<std::sync::Mutex<api_sidecar::Sidecars>>() {
-                    if let Ok(mut sidecars) = mutex.lock() {
-                        api_sidecar::stop(&mut sidecars);
+                if let Some(state) = app_handle.try_state::<std::sync::Mutex<SidecarLifecycle>>() {
+                    if let Ok(mut state) = state.lock() {
+                        state.shutting_down = true;
+                        if let Some(mut sidecars) = state.sidecars.take() {
+                            api_sidecar::stop(&mut sidecars);
+                        }
                     }
                 }
             }
