@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <meta name="theme-color" content="#0a0a0f" />
     <title>KitaWatch</title>
     <style>
-      /* Apply the app's dark theme before JavaScript and the main CSS load. */
+      /* Keep the native WebView's first paint consistent with KitaWatch. */
       html, body, #root {
         min-height: 100%;
         background-color: #0a0a0f;
@@ -15,10 +16,77 @@
       html, body {
         margin: 0;
       }
+      #startup-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background: #0a0a0f;
+        color: #e4e4e7;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        transition: opacity 160ms ease-out;
+      }
+      #startup-screen .startup-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+      #startup-screen .startup-mark {
+        display: grid;
+        width: 58px;
+        height: 58px;
+        place-items: center;
+        border: 1px solid rgba(168, 85, 247, 0.4);
+        border-radius: 18px;
+        background: linear-gradient(145deg, rgba(147, 51, 234, 0.25), rgba(10, 10, 15, 0.95));
+        color: #d8b4fe;
+        font-size: 28px;
+        font-weight: 750;
+        box-shadow: 0 0 42px rgba(147, 51, 234, 0.12);
+      }
+      #startup-screen .startup-name {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      #startup-screen .startup-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        color: #a1a1aa;
+        font-size: 12px;
+      }
+      #startup-screen .startup-spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(168, 85, 247, 0.25);
+        border-top-color: #c084fc;
+        border-radius: 50%;
+        animation: startup-spin 800ms linear infinite;
+      }
+      @keyframes startup-spin {
+        to { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #startup-screen .startup-spinner { animation: none; }
+        #startup-screen { transition: none; }
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="startup-screen" role="status" aria-live="polite">
+        <div class="startup-content">
+          <div class="startup-mark" aria-hidden="true">K</div>
+          <p class="startup-name">KitaWatch</p>
+          <p class="startup-status"><span class="startup-spinner" aria-hidden="true"></span>Starting up…</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
