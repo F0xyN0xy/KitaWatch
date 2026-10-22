@@ -106,6 +106,19 @@ export default function App() {
 
   const { state: updater, install, dismiss } = useUpdater();
 
+  // Signal the native startup window only after React has committed the app shell.
+  // The route may still be showing its Suspense fallback while the Home chunk loads.
+  useEffect(() => {
+    if (typeof performance !== 'undefined') {
+      performance.mark('kitawatch:app-shell-committed');
+      const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+      console.debug(
+        `[kitawatch][startup-timing] React app shell committed in ${(performance.now() - navigationStart).toFixed(1)}ms`,
+      );
+    }
+    window.dispatchEvent(new Event('kitawatch:app-ready'));
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     const cleanups: (() => void)[] = [];
