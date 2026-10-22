@@ -1,5 +1,4 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
 import {
   Play,
   Home,
@@ -53,24 +52,12 @@ const navItems = [
   },
 ];
 
-const listVariants: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.05 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, x: -12 },
-  show: { opacity: 1, x: 0, transition: { duration: 0.3, ease: 'easeOut' } },
-};
 
 export default function Sidebar() {
   const { pathname, search } = useLocation();
 
   return (
-    <motion.aside
-      initial={{ opacity: 0, x: -24 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
+    <aside
       className="hidden w-60 shrink-0 flex-col border-r border-white/5 bg-ink-900/60 md:flex"
     >
       <div className="flex h-16 items-center gap-2.5 border-b border-white/5 px-5">
@@ -82,16 +69,13 @@ export default function Sidebar() {
         </span>
       </div>
 
-      <motion.nav
-        variants={listVariants}
-        initial="hidden"
-        animate="show"
+      <nav
         className="flex flex-col gap-1 p-3"
       >
         {navItems.map(({ to, label, icon: Icon, match }) => {
           const active = match(pathname, search);
           return (
-            <motion.div key={label} variants={itemVariants}>
+            <div key={label}>
               <NavLink
                 to={to}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
@@ -103,10 +87,10 @@ export default function Sidebar() {
                 <Icon className="h-4.5 w-4.5" />
                 {label}
               </NavLink>
-            </motion.div>
+            </div>
           );
         })}
-      </motion.nav>
+      </nav>
 
       <div className="mt-auto space-y-2 p-4">
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
@@ -143,6 +127,6 @@ export default function Sidebar() {
           v2.0.2
         </p>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
