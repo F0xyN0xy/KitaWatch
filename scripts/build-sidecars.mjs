@@ -88,7 +88,7 @@ const anivexa = path.join(root, 'api', 'anivexa');
 if (existsSync(anivexa)) {
   const target = path.join(outDir, `kitawatch-anivexa-${triple}${ext}`);
   let built = false;
-  for (const nodeMajor of ['node20', 'node22']) {
+  for (const nodeMajor of ['node22']) {
     console.log(`[sidecars] pkg: anivexa (${nodeMajor}) ...`);
     try {
       // Linux CI: pkg may try to compile Node from source if prebuilt base missing -> hangs for 30min (g++ crypto_cipher.cc)
