@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0f" />
+    <title>KitaWatch</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a0a0f; color: #e4e4e7; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { display: grid; place-items: center; background: radial-gradient(ellipse at 50% 35%, rgba(126, 34, 206, .13), transparent 65%), #0a0a0f; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 13px; width: 100%; padding: 28px; }
+      .mark { display: grid; place-items: center; width: 56px; height: 56px; border: 1px solid rgba(168, 85, 247, .4); border-radius: 17px; background: linear-gradient(145deg, rgba(147, 51, 234, .25), rgba(10, 10, 15, .95)); color: #d8b4fe; font-size: 28px; font-weight: 750; box-shadow: 0 0 42px rgba(147, 51, 234, .12); }
+      h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: .02em; }
+      p { margin: 0; color: #a1a1aa; font-size: 12px; }
+      .track { width: 220px; max-width: 70vw; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: rgba(168, 85, 247, .18); }
+      .bar { width: 42%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #a855f7, #d8b4fe); animation: progress 1.35s ease-in-out infinite; }
+      @keyframes progress { 0% { transform: translateX(-110%); } 50% { transform: translateX(135%); } 100% { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) { .bar { animation: none; width: 100%; opacity: .75; } }
+    </style>
+  </head>
+  <body>
+    <main role="status" aria-live="polite">
+      <div class="mark" aria-hidden="true">K</div>
+      <h1>KitaWatch</h1>
+      <p>Preparing your library…</p>
+      <div class="track" role="progressbar" aria-label="Loading KitaWatch"><div class="bar"></div></div>
+    </main>
+  </body>
+</html>
