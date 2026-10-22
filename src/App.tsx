@@ -105,8 +105,7 @@ export default function App() {
 
   const { state: updater, install, dismiss } = useUpdater();
 
-  // Signal the native startup window only after React has committed the app shell.
-  // The route may still be showing its Suspense fallback while the Home chunk loads.
+  // Measure the shared shell separately; Home signals when the initial library route commits.
   useEffect(() => {
     if (typeof performance !== 'undefined') {
       performance.mark('kitawatch:app-shell-committed');
