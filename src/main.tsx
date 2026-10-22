@@ -9,8 +9,42 @@ import './styles/globals.css';
 const currentTauriWindow = isTauri() ? getCurrentWindow() : null;
 const isMainWindow = !currentTauriWindow || currentTauriWindow.label === 'main';
 
-// A dev-server fallback must never mount a second React app inside the splash window.
+if (import.meta.env.DEV && typeof performance !== 'undefined') {
+  performance.mark('kitawatch:frontend-entry');
+  const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+  console.debug(
+    `[kitawatch][startup-timing] frontend entry reached in ${(performance.now() - navigationStart).toFixed(1)}ms`,
+  );
+}
+
+// Register before React renders so the first committed app shell can trigger
+// the native splash handoff. Do not reveal the main window on a timer: on slower
+// machines that can expose about:blank before React has committed any UI.
+if (currentTauriWindow?.label === 'main') {
+  const onAppReady = async () => {
+    window.removeEventListener('kitawatch:app-ready', onAppReady);
+    try {
+      if (import.meta.env.DEV && typeof performance !== 'undefined') {
+        performance.mark('kitawatch:show-main-window');
+        const navigationStart = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+        console.debug(
+          `[kitawatch][startup-timing] main window shown after ${(performance.now() - navigationStart).toFixed(1)}ms`,
+        );
+      }
+      await currentTauriWindow.show();
+      const splash = (await getAllWebviewWindows()).find((window) => window.label === 'splashscreen');
+      if (splash) await splash.close();
+    } catch (error) {
+      console.error('[kitawatch][startup] Could not complete splash handoff.', error);
+    }
+  };
+  window.addEventListener('kitawatch:app-ready', onAppReady);
+}
+
 if (isMainWindow) {
+  if (import.meta.env.DEV && typeof performance !== 'undefined') {
+    performance.mark('kitawatch:react-root-render-start');
+  }
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <App />
