@@ -16,14 +16,13 @@ export default defineConfig({
     host: true,
     strictPort: true,
   },
+  // Register both HTML pages in dev and production. The splash must resolve to
+  // its own static document instead of falling back to index.html (React).
+  input: {
+    main: fileURLToPath(new URL('./index.html', import.meta.url)),
+    splashscreen: fileURLToPath(new URL('./splashscreen.html', import.meta.url)),
+  },
   build: {
     target: 'es2021',
-    // Build the minimal splash as a separate HTML entry so it does not load React.
-    rolldownOptions: {
-      input: {
-        main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        splashscreen: fileURLToPath(new URL('./splashscreen.html', import.meta.url)),
-      },
-    },
   },
 });
