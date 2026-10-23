@@ -44,12 +44,6 @@ export default function Watch({ id, episode }: WatchProps) {
   const preferredDubProvider = useSettingsStore((s) => s.preferredDubProvider);
 
   const info = useApi(() => fetchInfo(id), [id]);
-  // Episode metadata is optional: providers may not expose titles or
-  // episode-specific artwork. Keep navigation fully usable without it.
-  const episodeMetadata = useApi(() => api.episodes(id, epNum), [id, epNum], { retries: 1 });
-  const episodeByNumber = new Map(
-    (episodeMetadata.data ?? []).map((item) => [item.number, item] as const),
-  );
   // Episode strip: AniList's official count, capped at the latest AIRED
   // episode for ongoing shows (nextAiringEpisode = next unaired ep). Without
   // the cap, clicking a not-yet-aired episode sent providers hunting for
@@ -75,6 +69,17 @@ export default function Watch({ id, episode }: WatchProps) {
     setEpBlock(Math.min(Math.floor((epNum - 1) / BLOCK), blockCount - 1));
   }, [id, epNum, blockCount]);
   const blockEpisodes = episodeList.slice(epBlock * BLOCK, (epBlock + 1) * BLOCK);
+  // Load MAL titles for the visible 100-episode block. Provider metadata is
+  // cached separately, so changing blocks doesn't repeat the provider request.
+  const metadataEpisode = blockEpisodes[0] ?? epNum;
+  const episodeMetadata = useApi(
+    () => api.episodes(id, metadataEpisode),
+    [id, metadataEpisode],
+    { retries: 1 },
+  );
+  const episodeByNumber = new Map(
+    (episodeMetadata.data ?? []).map((item) => [item.number, item] as const),
+  );
   const [audio, setAudio] = useState<'sub' | 'dub'>('sub');
   // Hard guard: never resolve streams for an episode that hasn't aired.
   // Providers can't have it — some return a clean miss, others (Kuhi/Anivexa
