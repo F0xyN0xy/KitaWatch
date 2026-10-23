@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore';
+import { anivexa } from '@/services/anivexa';
 import type {
   AnimeInfo,
   AnimeSummary,
@@ -243,6 +244,116 @@ function adaptEpisodes(raw: unknown): EpisodeSummary[] {
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
 
+
+// MAL/Jikan episode-title enrichment. The provider API remains the primary source;
+// Jikan fills generic/missing titles only, so it cannot overwrite provider titles.
+interface JikanEpisode {
+  episode?: number | null;
+  title?: string | null;
+  title_romanji?: string | null;
+  title_japanese?: string | null;
+}
+
+interface JikanEpisodesResponse {
+  data?: JikanEpisode[];
+  pagination?: { has_next_page?: boolean };
+}
+
+const providerEpisodeCache = new Map<number, Promise<EpisodeSummary[]>>();
+const jikanEpisodePageCache = new Map<string, Promise<EpisodeSummary[]>>();
+
+function providerEpisodesFor(id: number): Promise<EpisodeSummary[]> {
+  const cached = providerEpisodeCache.get(id);
+  if (cached) return cached;
+  const pending = request<unknown>(`/anime/episodes/${id}`)
+    .then(adaptEpisodes)
+    .catch((error) => {
+      providerEpisodeCache.delete(id);
+      throw error;
+    });
+  providerEpisodeCache.set(id, pending);
+  return pending;
+}
+
+async function fetchJikanEpisodePage(malId: number, page: number): Promise<EpisodeSummary[]> {
+  const key = `${malId}:${page}`;
+  const cached = jikanEpisodePageCache.get(key);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(
+        `https://api.jikan.moe/v4/anime/${malId}/episodes?page=${page}`,
+        { signal: controller.signal, headers: { Accept: 'application/json' } },
+      );
+      if (!response.ok) throw new Error(`Jikan HTTP ${response.status}`);
+      const payload = (await response.json()) as JikanEpisodesResponse;
+      return (payload.data ?? [])
+        .filter((item) => typeof item.episode === 'number' && item.episode > 0)
+        .map((item) => ({
+          number: item.episode!,
+          title: meaningfulEpisodeTitle(item.title) ??
+            meaningfulEpisodeTitle(item.title_romanji) ??
+            meaningfulEpisodeTitle(item.title_japanese),
+        }))
+        .filter((item) => !!item.title);
+    } finally {
+      clearTimeout(timer);
+    }
+  })().catch((error) => {
+    // Only cache successful responses so temporary rate limits/outages can recover.
+    jikanEpisodePageCache.delete(key);
+    throw error;
+  });
+
+  jikanEpisodePageCache.set(key, pending);
+  return pending;
+}
+
+async function fetchExternalEpisodeTitles(
+  anilistId: number,
+  episode: number,
+): Promise<EpisodeSummary[]> {
+  const mapping = await anivexa.mapAnime(anilistId);
+  const malId = mapping.mappings?.malId;
+  if (!malId || !Number.isSafeInteger(malId) || malId <= 0) return [];
+  // Jikan paginates episode lists at 100 entries per page. Fetch only the
+  // page needed for the currently visible 100-episode block.
+  return fetchJikanEpisodePage(malId, Math.max(1, Math.ceil(episode / 100)));
+}
+
+async function loadEpisodes(id: number, episode: number): Promise<EpisodeSummary[]> {
+  const [providerResult, titleResult] = await Promise.allSettled([
+    providerEpisodesFor(id),
+    fetchExternalEpisodeTitles(id, episode),
+  ]);
+
+  const byNumber = new Map<number, EpisodeSummary>();
+  if (providerResult.status === 'fulfilled') {
+    for (const item of providerResult.value) byNumber.set(item.number, { ...item });
+  }
+
+  if (titleResult.status === 'fulfilled') {
+    for (const item of titleResult.value) {
+      const existing = byNumber.get(item.number) ?? { number: item.number };
+      // Keep a meaningful provider title; use MAL only to fill gaps.
+      if (!meaningfulEpisodeTitle(existing.title) && item.title) existing.title = item.title;
+      byNumber.set(item.number, existing);
+    }
+  } else {
+    console.warn('[KitaWatch] Could not load MAL episode titles:', titleResult.reason);
+  }
+
+  if (providerResult.status === 'rejected') {
+    // External metadata should still be useful if the local provider endpoint is down.
+    if (titleResult.status === 'rejected') throw providerResult.reason;
+  }
+
+  return [...byNumber.values()].sort((left, right) => left.number - right.number);
+}
+
 /** Kuhi API v3 client. Base URL configurable in Settings. */
 export const api = {
   // Search & discovery
@@ -327,8 +438,8 @@ export const api = {
   },
   recommendations: (id: number | string, page = 1) =>
     pagedAnime(`/anime/anime/${id}/recommendations`, { page }),
-  episodes: async (id: number | string) =>
-    adaptEpisodes(await request<unknown>(`/anime/episodes/${id}`)),
+  episodes: (id: number | string, episode = 1) =>
+    loadEpisodes(Number(id), Math.max(1, Number(episode) || 1)),
 
   // Streaming
   extract: (query: number | string, episode: number, audio: AudioType = 'sub') =>
