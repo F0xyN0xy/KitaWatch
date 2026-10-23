@@ -181,37 +181,61 @@ async function pagedAnime(
 
 interface RawEpisode {
   number?: number;
-  title?: string;
-  thumbnail?: string;
+  title?: string | null;
+  thumbnail?: string | null;
+  /** Kuhi v3 provider payloads call episode artwork "image". */
+  image?: string | null;
 }
 
 interface EpisodesEnvelope {
   providers?: Record<
     string,
-    { episodes?: { sub?: RawEpisode[]; dub?: RawEpisode[] } }
+    {
+      meta?: { matchScore?: number };
+      episodes?: { sub?: RawEpisode[]; dub?: RawEpisode[] };
+    }
   >;
+}
+
+function meaningfulEpisodeTitle(value: string | null | undefined): string | undefined {
+  const title = value?.trim();
+  if (!title || /^episode\\s+\\d+$/i.test(title)) return undefined;
+  return title;
 }
 
 function adaptEpisodes(raw: unknown): EpisodeSummary[] {
   if (Array.isArray(raw)) {
     return raw
       .filter((e): e is RawEpisode & { number: number } => typeof (e as RawEpisode).number === 'number')
-      .map((e) => ({ number: e.number, title: e.title, thumbnail: e.thumbnail }));
+      .map((e) => ({
+        number: e.number,
+        title: meaningfulEpisodeTitle(e.title),
+        thumbnail: e.thumbnail?.trim() || e.image?.trim() || undefined,
+      }));
   }
 
   const env = raw as EpisodesEnvelope;
   if (!env?.providers) return [];
 
   const byNumber = new Map<number, EpisodeSummary>();
-  for (const data of Object.values(env.providers)) {
+  // Prefer providers with stronger anime matches, but merge all providers so
+  // a generic "Episode N" entry cannot hide a real title or episode image.
+  const providers = Object.values(env.providers).sort(
+    (a, b) => (b.meta?.matchScore ?? 0) - (a.meta?.matchScore ?? 0),
+  );
+  for (const data of providers) {
     for (const kind of ['sub', 'dub'] as const) {
       for (const ep of data?.episodes?.[kind] ?? []) {
         if (typeof ep.number !== 'number') continue;
         const existing = byNumber.get(ep.number) ?? { number: ep.number };
         if (kind === 'sub') existing.hasSub = true;
         else existing.hasDub = true;
-        existing.title ??= ep.title;
-        existing.thumbnail ??= ep.thumbnail;
+        const title = meaningfulEpisodeTitle(ep.title);
+        if (title && (!existing.title || /^episode\\s+\\d+$/i.test(existing.title))) {
+          existing.title = title;
+        }
+        const image = ep.thumbnail?.trim() || ep.image?.trim();
+        if (image && !existing.thumbnail) existing.thumbnail = image;
         byNumber.set(ep.number, existing);
       }
     }
