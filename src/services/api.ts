@@ -199,7 +199,7 @@ interface EpisodesEnvelope {
 
 function meaningfulEpisodeTitle(value: string | null | undefined): string | undefined {
   const title = value?.trim();
-  if (!title || /^episode\\s+\\d+$/i.test(title)) return undefined;
+  if (!title || /^episode\s+\d+$/i.test(title)) return undefined;
   return title;
 }
 
@@ -231,7 +231,7 @@ function adaptEpisodes(raw: unknown): EpisodeSummary[] {
         if (kind === 'sub') existing.hasSub = true;
         else existing.hasDub = true;
         const title = meaningfulEpisodeTitle(ep.title);
-        if (title && (!existing.title || /^episode\\s+\\d+$/i.test(existing.title))) {
+        if (title && (!existing.title || /^episode\s+\d+$/i.test(existing.title))) {
           existing.title = title;
         }
         const image = ep.thumbnail?.trim() || ep.image?.trim();
