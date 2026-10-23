@@ -336,7 +336,7 @@ export default function Watch({ id, episode }: WatchProps) {
           Background merges re-trigger streams.reload() — with data already
           loaded that refresh must NOT unmount the player into a skeleton
           (the "Anivexa erased my source" flash). Skeleton only pre-data. */}
-      {info.loading || (!infoLoaded && !info.error) || (streams.loading && !streams.data) ? (
+      {info.loading || (!infoLoaded && !info.error) || (streams.loading && allSources.length === 0) ? (
         <div
           className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl bg-ink-900 text-zinc-400 ring-1 ring-white/5"
           role="status"
