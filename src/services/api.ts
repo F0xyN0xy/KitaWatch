@@ -326,31 +326,37 @@ async function fetchExternalEpisodeTitles(
 }
 
 async function loadEpisodes(id: number, episode: number): Promise<EpisodeSummary[]> {
-  const [providerResult, titleResult] = await Promise.allSettled([
-    providerEpisodesFor(id),
-    fetchExternalEpisodeTitles(id, episode),
-  ]);
+  // Provider metadata is the primary source for both episode titles and
+  // episode-specific artwork. Return it as soon as it is available rather
+  // than making the UI wait for an optional external metadata service.
+  const providerPromise = providerEpisodesFor(id);
+  const titlePromise = fetchExternalEpisodeTitles(id, episode).catch((error) => {
+    console.warn('[KitaWatch] Could not load MAL episode titles:', error);
+    return [] as EpisodeSummary[];
+  });
+
+  const providerResult = await Promise.allSettled([providerPromise]);
+  if (providerResult[0].status === 'rejected') {
+    // If the provider API fails, external titles can still provide useful
+    // episode labels. Do not discard them while waiting for the fallback.
+    const externalTitles = await titlePromise;
+    if (externalTitles.length === 0) throw providerResult[0].reason;
+    return externalTitles;
+  }
 
   const byNumber = new Map<number, EpisodeSummary>();
-  if (providerResult.status === 'fulfilled') {
-    for (const item of providerResult.value) byNumber.set(item.number, { ...item });
-  }
+  for (const item of providerResult[0].value) byNumber.set(item.number, { ...item });
 
-  if (titleResult.status === 'fulfilled') {
-    for (const item of titleResult.value) {
-      const existing = byNumber.get(item.number) ?? { number: item.number };
-      // Keep a meaningful provider title; use MAL only to fill gaps.
-      if (!meaningfulEpisodeTitle(existing.title) && item.title) existing.title = item.title;
-      byNumber.set(item.number, existing);
+  // Merge optional MAL titles without delaying provider artwork/titles.
+  // Provider metadata remains authoritative whenever it has a meaningful title.
+  void titlePromise.then((externalTitles) => {
+    for (const item of externalTitles) {
+      const existing = byNumber.get(item.number);
+      if (existing && !meaningfulEpisodeTitle(existing.title) && item.title) {
+        existing.title = item.title;
+      }
     }
-  } else {
-    console.warn('[KitaWatch] Could not load MAL episode titles:', titleResult.reason);
-  }
-
-  if (providerResult.status === 'rejected') {
-    // External metadata should still be useful if the local provider endpoint is down.
-    if (titleResult.status === 'rejected') throw providerResult.reason;
-  }
+  });
 
   return [...byNumber.values()].sort((left, right) => left.number - right.number);
 }
