@@ -48,7 +48,7 @@ export default function Watch({ id, episode }: WatchProps) {
   // episode-specific artwork. Keep navigation fully usable without it.
   const episodeMetadata = useApi(() => api.episodes(id), [id], { retries: 1 });
   const episodeByNumber = new Map(
-    (episodeMetadata.data ?? []).map((item) => [item.number, item]),
+    (episodeMetadata.data ?? []).map((item) => [item.number, item] as const),
   );
   // Episode strip: AniList's official count, capped at the latest AIRED
   // episode for ongoing shows (nextAiringEpisode = next unaired ep). Without
