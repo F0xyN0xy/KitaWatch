@@ -248,7 +248,8 @@ function adaptEpisodes(raw: unknown): EpisodeSummary[] {
 // MAL/Jikan episode-title enrichment. The provider API remains the primary source;
 // Jikan fills generic/missing titles only, so it cannot overwrite provider titles.
 interface JikanEpisode {
-  episode?: number | null;
+  /** Jikan's episode-list endpoint uses mal_id for the episode number. */
+  mal_id?: number | null;
   title?: string | null;
   title_romanji?: string | null;
   title_japanese?: string | null;
@@ -291,9 +292,9 @@ async function fetchJikanEpisodePage(malId: number, page: number): Promise<Episo
       if (!response.ok) throw new Error(`Jikan HTTP ${response.status}`);
       const payload = (await response.json()) as JikanEpisodesResponse;
       return (payload.data ?? [])
-        .filter((item) => typeof item.episode === 'number' && item.episode > 0)
+        .filter((item) => typeof item.mal_id === 'number' && item.mal_id > 0)
         .map((item) => ({
-          number: item.episode!,
+          number: item.mal_id!,
           title: meaningfulEpisodeTitle(item.title) ??
             meaningfulEpisodeTitle(item.title_romanji) ??
             meaningfulEpisodeTitle(item.title_japanese),
