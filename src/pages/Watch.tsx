@@ -46,7 +46,7 @@ export default function Watch({ id, episode }: WatchProps) {
   const info = useApi(() => fetchInfo(id), [id]);
   // Episode metadata is optional: providers may not expose titles or
   // episode-specific artwork. Keep navigation fully usable without it.
-  const episodeMetadata = useApi(() => api.episodes(id), [id], { retries: 1 });
+  const episodeMetadata = useApi(() => api.episodes(id, epNum), [id, epNum], { retries: 1 });
   const episodeByNumber = new Map(
     (episodeMetadata.data ?? []).map((item) => [item.number, item] as const),
   );
