@@ -221,7 +221,7 @@ async function mapAnime(anilistId: number | string): Promise<AnimeIdMappings> {
   const cached = animeMappingCache.get(id);
   if (cached) return cached;
 
-  const pending = get<AnimeIdMappings>(`/map/${id}`).catch((error) => {
+  const pending = withTimeout(get<AnimeIdMappings>(`/map/${id}`), 5_000).catch((error) => {
     // Don't permanently cache failures; a later watch can retry.
     animeMappingCache.delete(id);
     throw error;
