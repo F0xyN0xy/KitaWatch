@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore';
+import { anivexa } from '@/services/anivexa';
 import type {
   AnimeInfo,
   AnimeSummary,
@@ -181,42 +182,247 @@ async function pagedAnime(
 
 interface RawEpisode {
   number?: number;
-  title?: string;
-  thumbnail?: string;
+  title?: string | null;
+  thumbnail?: string | null;
+  /** Kuhi v3 provider payloads call episode artwork "image". */
+  image?: string | null;
 }
 
 interface EpisodesEnvelope {
   providers?: Record<
     string,
-    { episodes?: { sub?: RawEpisode[]; dub?: RawEpisode[] } }
+    {
+      meta?: { matchScore?: number };
+      episodes?: { sub?: RawEpisode[]; dub?: RawEpisode[] };
+    }
   >;
+}
+
+function meaningfulEpisodeTitle(value: string | null | undefined): string | undefined {
+  const title = value?.trim();
+  if (!title || /^episode\s+\d+$/i.test(title)) return undefined;
+  return title;
 }
 
 function adaptEpisodes(raw: unknown): EpisodeSummary[] {
   if (Array.isArray(raw)) {
     return raw
       .filter((e): e is RawEpisode & { number: number } => typeof (e as RawEpisode).number === 'number')
-      .map((e) => ({ number: e.number, title: e.title, thumbnail: e.thumbnail }));
+      .map((e) => ({
+        number: e.number,
+        title: meaningfulEpisodeTitle(e.title),
+        thumbnail: e.thumbnail?.trim() || e.image?.trim() || undefined,
+      }));
   }
 
   const env = raw as EpisodesEnvelope;
   if (!env?.providers) return [];
 
   const byNumber = new Map<number, EpisodeSummary>();
-  for (const data of Object.values(env.providers)) {
+  // Prefer providers with stronger anime matches, but merge all providers so
+  // a generic "Episode N" entry cannot hide a real title or episode image.
+  const providers = Object.values(env.providers).sort(
+    (a, b) => (b.meta?.matchScore ?? 0) - (a.meta?.matchScore ?? 0),
+  );
+  for (const data of providers) {
     for (const kind of ['sub', 'dub'] as const) {
       for (const ep of data?.episodes?.[kind] ?? []) {
         if (typeof ep.number !== 'number') continue;
         const existing = byNumber.get(ep.number) ?? { number: ep.number };
         if (kind === 'sub') existing.hasSub = true;
         else existing.hasDub = true;
-        existing.title ??= ep.title;
-        existing.thumbnail ??= ep.thumbnail;
+        const title = meaningfulEpisodeTitle(ep.title);
+        if (title && (!existing.title || /^episode\s+\d+$/i.test(existing.title))) {
+          existing.title = title;
+        }
+        const image = ep.thumbnail?.trim() || ep.image?.trim();
+        if (image && !existing.thumbnail) existing.thumbnail = image;
         byNumber.set(ep.number, existing);
       }
     }
   }
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+
+// MAL/Jikan episode-title enrichment. The provider API remains the primary source;
+// Jikan fills generic/missing titles only, so it cannot overwrite provider titles.
+interface JikanEpisode {
+  /** Jikan's episode-list endpoint uses mal_id for the episode number. */
+  mal_id?: number | null;
+  title?: string | null;
+  title_romanji?: string | null;
+  title_japanese?: string | null;
+}
+
+interface JikanEpisodesResponse {
+  data?: JikanEpisode[];
+  pagination?: { has_next_page?: boolean };
+}
+
+const animeMetadataApiBase = (import.meta.env.VITE_ANIME_METADATA_API_URL as string | undefined)
+  ?.trim()
+  .replace(/\/+$/, "");
+
+interface AnimeMetadataApiResponse {
+  success?: boolean;
+  data?: {
+    episodes?: Array<{
+      number?: number;
+      title?: string | null;
+      image?: string | null;
+      airDate?: string | null;
+      hasAired?: boolean;
+      source?: string;
+    }>;
+  };
+}
+
+/** Optional TMDB-backed metadata service; it must be configured at build time. */
+async function fetchTmdbEpisodes(id: number): Promise<EpisodeSummary[]> {
+  if (!animeMetadataApiBase) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(
+      `${animeMetadataApiBase}/api/episodes/${encodeURIComponent(id)}`,
+      { signal: controller.signal, headers: { Accept: "application/json" } },
+    );
+    if (!response.ok) throw new Error(`metadata API HTTP ${response.status}`);
+    const payload = (await response.json()) as AnimeMetadataApiResponse;
+    if (payload.success !== true || !Array.isArray(payload.data?.episodes)) return [];
+
+    return payload.data.episodes
+      .filter((ep) => typeof ep.number === "number" && Number.isSafeInteger(ep.number) && ep.number > 0)
+      .map((ep) => {
+        const image = ep.image?.trim();
+        return {
+          number: ep.number!,
+          title: meaningfulEpisodeTitle(ep.title),
+          thumbnail: image && /^https:\/\//i.test(image) ? image : undefined,
+        };
+      });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const providerEpisodeCache = new Map<number, Promise<EpisodeSummary[]>>();
+const jikanEpisodePageCache = new Map<string, Promise<EpisodeSummary[]>>();
+
+function providerEpisodesFor(id: number): Promise<EpisodeSummary[]> {
+  const cached = providerEpisodeCache.get(id);
+  if (cached) return cached;
+  const pending = request<unknown>(`/anime/episodes/${id}`)
+    .then(adaptEpisodes)
+    .catch((error) => {
+      providerEpisodeCache.delete(id);
+      throw error;
+    });
+  providerEpisodeCache.set(id, pending);
+  return pending;
+}
+
+async function fetchJikanEpisodePage(malId: number, page: number): Promise<EpisodeSummary[]> {
+  const key = `${malId}:${page}`;
+  const cached = jikanEpisodePageCache.get(key);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(
+        `https://api.jikan.moe/v4/anime/${malId}/episodes?page=${page}`,
+        { signal: controller.signal, headers: { Accept: 'application/json' } },
+      );
+      if (!response.ok) throw new Error(`Jikan HTTP ${response.status}`);
+      const payload = (await response.json()) as JikanEpisodesResponse;
+      return (payload.data ?? [])
+        .filter((item) => typeof item.mal_id === 'number' && item.mal_id > 0)
+        .map((item) => ({
+          number: item.mal_id!,
+          title: meaningfulEpisodeTitle(item.title) ??
+            meaningfulEpisodeTitle(item.title_romanji) ??
+            meaningfulEpisodeTitle(item.title_japanese),
+        }))
+        .filter((item) => !!item.title);
+    } finally {
+      clearTimeout(timer);
+    }
+  })().catch((error) => {
+    // Only cache successful responses so temporary rate limits/outages can recover.
+    jikanEpisodePageCache.delete(key);
+    throw error;
+  });
+
+  jikanEpisodePageCache.set(key, pending);
+  return pending;
+}
+
+async function fetchExternalEpisodeTitles(
+  anilistId: number,
+  episode: number,
+): Promise<EpisodeSummary[]> {
+  const mapping = await anivexa.mapAnime(anilistId);
+  const malId = mapping.mappings?.malId;
+  if (!malId || !Number.isSafeInteger(malId) || malId <= 0) return [];
+  // Jikan paginates episode lists at 100 entries per page. Fetch only the
+  // page needed for the currently visible 100-episode block.
+  return fetchJikanEpisodePage(malId, Math.max(1, Math.ceil(episode / 100)));
+}
+
+async function loadEpisodes(id: number, episode: number): Promise<EpisodeSummary[]> {
+  // Prefer TMDB-backed episode stills/titles when a metadata API URL is configured.
+  // Provider data and Jikan remain fallbacks for shows absent from TMDB.
+  const tmdbPromise = fetchTmdbEpisodes(id).catch((error) => {
+    console.warn('[KitaWatch] Could not load TMDB episode metadata:', error);
+    return [] as EpisodeSummary[];
+  });
+  const providerPromise = providerEpisodesFor(id);
+  const titlePromise = fetchExternalEpisodeTitles(id, episode).catch((error) => {
+    console.warn('[KitaWatch] Could not load MAL episode titles:', error);
+    return [] as EpisodeSummary[];
+  });
+
+  const [tmdbEpisodes, providerResult] = await Promise.all([
+    tmdbPromise,
+    Promise.allSettled([providerPromise]),
+  ]);
+  const byNumber = new Map<number, EpisodeSummary>();
+  for (const item of tmdbEpisodes) byNumber.set(item.number, { ...item });
+  if (providerResult[0].status === 'fulfilled') {
+    for (const item of providerResult[0].value) {
+      const existing = byNumber.get(item.number) ?? { number: item.number };
+      if (!meaningfulEpisodeTitle(existing.title) && meaningfulEpisodeTitle(item.title)) {
+        existing.title = item.title;
+      }
+      if (!existing.thumbnail && item.thumbnail) existing.thumbnail = item.thumbnail;
+      existing.hasSub ??= item.hasSub;
+      existing.hasDub ??= item.hasDub;
+      byNumber.set(item.number, existing);
+    }
+  } else if (byNumber.size === 0) {
+    // If both metadata sources fail, external titles can still provide useful labels.
+    const externalTitles = await titlePromise;
+    if (externalTitles.length === 0) throw providerResult[0].reason;
+    return externalTitles;
+  }
+
+  // Merge MAL/Jikan titles before returning. The old fire-and-forget merge
+  // mutated a local Map after this function had returned, so React never saw
+  // the updated titles. Awaiting the optional fallback makes the returned
+  // metadata complete and observable by every caller.
+  const externalTitles = await titlePromise;
+  for (const item of externalTitles) {
+    const existing = byNumber.get(item.number) ?? { number: item.number };
+    if (!meaningfulEpisodeTitle(existing.title) && item.title) {
+      existing.title = item.title;
+    }
+    byNumber.set(item.number, existing);
+  }
+
+  return [...byNumber.values()].sort((left, right) => left.number - right.number);
 }
 
 /** Kuhi API v3 client. Base URL configurable in Settings. */
@@ -303,8 +509,8 @@ export const api = {
   },
   recommendations: (id: number | string, page = 1) =>
     pagedAnime(`/anime/anime/${id}/recommendations`, { page }),
-  episodes: async (id: number | string) =>
-    adaptEpisodes(await request<unknown>(`/anime/episodes/${id}`)),
+  episodes: (id: number | string, episode = 1) =>
+    loadEpisodes(Number(id), Math.max(1, Number(episode) || 1)),
 
   // Streaming
   extract: (query: number | string, episode: number, audio: AudioType = 'sub') =>

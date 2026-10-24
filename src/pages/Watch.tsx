@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Layers, LoaderCircle } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import TorrentPanel from '@/components/player/TorrentPanel';
@@ -13,6 +13,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import Disclaimer from '@/components/ui/Disclaimer';
 import { providerPreferenceKey, resolveStreams, streamUpdates } from '@/services/streamResolver';
 import { fetchAnimeInfo } from '@/services/info';
+import { api } from '@/services/api';
 import { useApi } from '@/hooks/useApi';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHistoryStore } from '@/stores/historyStore';
@@ -42,7 +43,7 @@ export default function Watch({ id, episode }: WatchProps) {
   const preferredSubProvider = useSettingsStore((s) => s.preferredSubProvider);
   const preferredDubProvider = useSettingsStore((s) => s.preferredDubProvider);
 
-  const info = useApi(() => fetchInfo(id!), [id]);
+  const info = useApi(() => fetchInfo(id), [id]);
   // Episode strip: AniList's official count, capped at the latest AIRED
   // episode for ongoing shows (nextAiringEpisode = next unaired ep). Without
   // the cap, clicking a not-yet-aired episode sent providers hunting for
@@ -68,6 +69,17 @@ export default function Watch({ id, episode }: WatchProps) {
     setEpBlock(Math.min(Math.floor((epNum - 1) / BLOCK), blockCount - 1));
   }, [id, epNum, blockCount]);
   const blockEpisodes = episodeList.slice(epBlock * BLOCK, (epBlock + 1) * BLOCK);
+  // Load MAL titles for the visible 100-episode block. Provider metadata is
+  // cached separately, so changing blocks doesn't repeat the provider request.
+  const metadataEpisode = blockEpisodes[0] ?? epNum;
+  const episodeMetadata = useApi(
+    () => api.episodes(id, metadataEpisode),
+    [id, metadataEpisode],
+    { retries: 1 },
+  );
+  const episodeByNumber = new Map(
+    (episodeMetadata.data ?? []).map((item) => [item.number, item] as const),
+  );
   const [audio, setAudio] = useState<'sub' | 'dub'>('sub');
   // Hard guard: never resolve streams for an episode that hasn't aired.
   // Providers can't have it — some return a clean miss, others (Kuhi/Anivexa
@@ -303,6 +315,9 @@ export default function Watch({ id, episode }: WatchProps) {
             )}
             <span className="mx-2 text-zinc-600">·</span>
             Episode {epNum}
+            {episodeByNumber.get(epNum)?.title && (
+              <span className="text-zinc-400"> — {episodeByNumber.get(epNum)?.title}</span>
+            )}
           </p>
         )}
         <div className="ml-auto flex shrink-0 items-center rounded-lg bg-ink-850 p-0.5 ring-1 ring-white/10">
@@ -326,8 +341,22 @@ export default function Watch({ id, episode }: WatchProps) {
           Background merges re-trigger streams.reload() — with data already
           loaded that refresh must NOT unmount the player into a skeleton
           (the "Anivexa erased my source" flash). Skeleton only pre-data. */}
-      {streams.loading && !streams.data ? (
-        <Skeleton className="aspect-video rounded-2xl" />
+      {info.loading || (!infoLoaded && !info.error) || (streams.loading && allSources.length === 0) ? (
+        <div
+          className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl bg-ink-900 text-zinc-400 ring-1 ring-white/5"
+          role="status"
+          aria-live="polite"
+        >
+          <LoaderCircle className="h-7 w-7 animate-spin text-accent-400" />
+          <p className="text-sm">Finding a playable stream…</p>
+          <p className="text-xs text-zinc-600">Checking available providers for episode {epNum}</p>
+        </div>
+      ) : info.error ? (
+        <ErrorState
+          title="Couldn't load anime information"
+          message={info.error}
+          onRetry={info.reload}
+        />
       ) : activeSource ? (
         httpPlayer
       ) : torrentSource ? (
@@ -410,19 +439,50 @@ export default function Watch({ id, episode }: WatchProps) {
             )}
           </div>
           <div className="no-scrollbar flex flex-wrap gap-2">
-            {blockEpisodes.map((num) => (
-              <button
-                key={num}
-                onClick={() => navigate(`/watch/${id}/${num}`)}
-                className={`min-w-[2.75rem] rounded-lg px-2.5 py-1.5 text-xs ring-1 transition ${
-                  num === epNum
-                    ? 'bg-accent-600/20 font-semibold text-accent-300 ring-accent-500/50'
-                    : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
+            {blockEpisodes.map((num) => {
+              const metadata = episodeByNumber.get(num);
+              const title = metadata?.title?.trim();
+              // Only use episode-specific artwork here. Reusing the anime cover
+              // made every episode thumbnail identical and hid missing provider data.
+              const thumbnail = metadata?.thumbnail?.trim();
+              return (
+                <button
+                  key={num}
+                  type="button"
+                  aria-current={num === epNum ? 'page' : undefined}
+                  aria-label={`Episode ${num}${title ? `: ${title}` : ''}`}
+                  onClick={() => navigate(`/watch/${id}/${num}`)}
+                  className={`w-32 shrink-0 overflow-hidden rounded-lg text-left ring-1 transition ${
+                    num === epNum
+                      ? 'bg-accent-600/20 text-accent-300 ring-accent-500/50'
+                      : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
+                  }`}
+                >
+                  <span className="relative flex aspect-video items-center justify-center overflow-hidden bg-ink-800 text-sm font-semibold">
+                    <span aria-hidden="true">{num}</span>
+                    {thumbnail && (
+                      <img
+                        src={thumbnail}
+                        alt=""
+                        loading="lazy"
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span className="block px-2 py-2">
+                    <span className="block text-xs font-medium">Episode {num}</span>
+                    {title && (
+                      <span className="mt-1 block truncate text-[11px] text-zinc-500" title={title}>
+                        {title}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           {info.data?.nextAiringEpisode != null && info.data?.nextAiringAt != null && (
             <p className="mt-3 text-xs text-zinc-600">

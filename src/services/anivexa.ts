@@ -205,7 +205,33 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /** Anivexa-API: one AniList ID in, streams from every provider out. */
+interface AnimeIdMappings {
+  mappings?: {
+    malId?: number | null;
+    anidbId?: number | null;
+  };
+}
+
+const animeMappingCache = new Map<number, Promise<AnimeIdMappings>>();
+
+/** Cross-database IDs for an AniList anime, provided by the existing /map route. */
+async function mapAnime(anilistId: number | string): Promise<AnimeIdMappings> {
+  const id = Number(anilistId);
+  if (!Number.isSafeInteger(id) || id <= 0) return {};
+  const cached = animeMappingCache.get(id);
+  if (cached) return cached;
+
+  const pending = withTimeout(get<AnimeIdMappings>(`/map/${id}`), 5_000).catch((error) => {
+    // Don't permanently cache failures; a later watch can retry.
+    animeMappingCache.delete(id);
+    throw error;
+  });
+  animeMappingCache.set(id, pending);
+  return pending;
+}
+
 export const anivexa = {
+  mapAnime,
   /** Query all providers in parallel; merge every success.
    *  Each provider gets 12s — slow/hung providers can't delay the chain. */
   async watchAll(
