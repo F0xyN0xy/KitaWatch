@@ -47,15 +47,34 @@ function getMarkupAttr(markup, name) {
 }
 
 function decodeMarkupText(value) {
+  // Decode entities in one pass. Chained replacements can accidentally decode
+  // nested entities more than once (e.g. &amp;lt; becoming <).
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&(?:amp|quot|lt|gt|apos|#39|#\d+|#x[\da-f]+);/gi, (entity) => {
+      const named = {
+        "&amp;": "&",
+        "&quot;": '"',
+        "&lt;": "<",
+        "&gt;": ">",
+        "&apos;": "'",
+        "&#39;": "'",
+      };
+      const decoded = named[entity.toLowerCase()];
+      if (decoded !== undefined) return decoded;
+      const numeric = entity.match(/^&#(x[\da-f]+|\d+);$/i);
+      if (!numeric) return entity;
+      const codePoint = numeric[1].toLowerCase().startsWith("x")
+        ? parseInt(numeric[1].slice(1), 16)
+        : Number(numeric[1]);
+      try {
+        return codePoint >= 0 && codePoint <= 0x10ffff
+          ? String.fromCodePoint(codePoint)
+          : entity;
+      } catch {
+        return entity;
+      }
+    })
     .replace(/\s+/g, " ")
     .trim();
 }
