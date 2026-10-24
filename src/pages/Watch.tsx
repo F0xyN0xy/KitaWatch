@@ -442,9 +442,9 @@ export default function Watch({ id, episode }: WatchProps) {
             {blockEpisodes.map((num) => {
               const metadata = episodeByNumber.get(num);
               const title = metadata?.title?.trim();
-              // Episode artwork is provider-dependent. Always keep the cards visual
-              // by falling back to the anime's own artwork when no episode image exists.
-              const thumbnail = metadata?.thumbnail?.trim() || info.data?.cover || info.data?.banner;
+              // Only use episode-specific artwork here. Reusing the anime cover
+              // made every episode thumbnail identical and hid missing provider data.
+              const thumbnail = metadata?.thumbnail?.trim();
               return (
                 <button
                   key={num}
