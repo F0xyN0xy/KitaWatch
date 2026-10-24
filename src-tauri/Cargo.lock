@@ -2156,10 +2156,11 @@ dependencies = [
 
 [[package]]
 name = "kitawatch"
-version = "2.0.2"
+version = "3.0.0"
 dependencies = [
  "discord-rich-presence",
  "dotenvy",
+ "futures-util",
  "libc",
  "reqwest",
  "serde",
