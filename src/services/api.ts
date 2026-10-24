@@ -260,6 +260,53 @@ interface JikanEpisodesResponse {
   pagination?: { has_next_page?: boolean };
 }
 
+const animeMetadataApiBase = (import.meta.env.VITE_ANIME_METADATA_API_URL as string | undefined)
+  ?.trim()
+  .replace(/\/+$/, "");
+
+interface AnimeMetadataApiResponse {
+  success?: boolean;
+  data?: {
+    episodes?: Array<{
+      number?: number;
+      title?: string | null;
+      image?: string | null;
+      airDate?: string | null;
+      hasAired?: boolean;
+      source?: string;
+    }>;
+  };
+}
+
+/** Optional TMDB-backed metadata service; it must be configured at build time. */
+async function fetchTmdbEpisodes(id: number): Promise<EpisodeSummary[]> {
+  if (!animeMetadataApiBase) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(
+      `${animeMetadataApiBase}/api/episodes/${encodeURIComponent(id)}`,
+      { signal: controller.signal, headers: { Accept: "application/json" } },
+    );
+    if (!response.ok) throw new Error(`metadata API HTTP ${response.status}`);
+    const payload = (await response.json()) as AnimeMetadataApiResponse;
+    if (payload.success !== true || !Array.isArray(payload.data?.episodes)) return [];
+
+    return payload.data.episodes
+      .filter((ep) => typeof ep.number === "number" && Number.isSafeInteger(ep.number) && ep.number > 0)
+      .map((ep) => {
+        const image = ep.image?.trim();
+        return {
+          number: ep.number!,
+          title: meaningfulEpisodeTitle(ep.title),
+          thumbnail: image && /^https:\/\//i.test(image) ? image : undefined,
+        };
+      });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const providerEpisodeCache = new Map<number, Promise<EpisodeSummary[]>>();
 const jikanEpisodePageCache = new Map<string, Promise<EpisodeSummary[]>>();
 
@@ -326,26 +373,41 @@ async function fetchExternalEpisodeTitles(
 }
 
 async function loadEpisodes(id: number, episode: number): Promise<EpisodeSummary[]> {
-  // Provider metadata is the primary source for both episode titles and
-  // episode-specific artwork. Return it as soon as it is available rather
-  // than making the UI wait for an optional external metadata service.
+  // Prefer TMDB-backed episode stills/titles when a metadata API URL is configured.
+  // Provider data and Jikan remain fallbacks for shows absent from TMDB.
+  const tmdbPromise = fetchTmdbEpisodes(id).catch((error) => {
+    console.warn('[KitaWatch] Could not load TMDB episode metadata:', error);
+    return [] as EpisodeSummary[];
+  });
   const providerPromise = providerEpisodesFor(id);
   const titlePromise = fetchExternalEpisodeTitles(id, episode).catch((error) => {
     console.warn('[KitaWatch] Could not load MAL episode titles:', error);
     return [] as EpisodeSummary[];
   });
 
-  const providerResult = await Promise.allSettled([providerPromise]);
-  if (providerResult[0].status === 'rejected') {
-    // If the provider API fails, external titles can still provide useful
-    // episode labels. Do not discard them while waiting for the fallback.
+  const [tmdbEpisodes, providerResult] = await Promise.all([
+    tmdbPromise,
+    Promise.allSettled([providerPromise]),
+  ]);
+  const byNumber = new Map<number, EpisodeSummary>();
+  for (const item of tmdbEpisodes) byNumber.set(item.number, { ...item });
+  if (providerResult[0].status === 'fulfilled') {
+    for (const item of providerResult[0].value) {
+      const existing = byNumber.get(item.number) ?? { number: item.number };
+      if (!meaningfulEpisodeTitle(existing.title) && meaningfulEpisodeTitle(item.title)) {
+        existing.title = item.title;
+      }
+      if (!existing.thumbnail && item.thumbnail) existing.thumbnail = item.thumbnail;
+      existing.hasSub ??= item.hasSub;
+      existing.hasDub ??= item.hasDub;
+      byNumber.set(item.number, existing);
+    }
+  } else if (byNumber.size === 0) {
+    // If both metadata sources fail, external titles can still provide useful labels.
     const externalTitles = await titlePromise;
     if (externalTitles.length === 0) throw providerResult[0].reason;
     return externalTitles;
   }
-
-  const byNumber = new Map<number, EpisodeSummary>();
-  for (const item of providerResult[0].value) byNumber.set(item.number, { ...item });
 
   // Merge MAL/Jikan titles before returning. The old fire-and-forget merge
   // mutated a local Map after this function had returned, so React never saw
