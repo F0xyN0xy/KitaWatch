@@ -39,6 +39,81 @@ async function getJSON(url, headers = {}) {
   return res.json();
 }
 
+
+function getMarkupAttr(markup, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(markup || "").match(new RegExp("\\b" + escaped + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i"));
+  return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
+}
+
+function decodeMarkupText(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function normalizeEpisodeImage(value) {
+  const raw = String(value || "").trim();
+  if (!raw || /^(?:data:|blob:|javascript:)/i.test(raw)) return null;
+  try {
+    const url = new URL(raw, ANIKOTO);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    if (["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase())) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Read common image/lazy-load attributes from Anikoto's episode markup. */
+function episodeImageFromMarkup(tag, inner) {
+  for (const attr of [
+    "data-episode-image", "data-episode-thumbnail", "data-thumbnail",
+    "data-image", "data-poster", "data-thumb", "data-src",
+    "data-original", "data-lazy-src", "data-background", "data-bg"
+  ]) {
+    const image = normalizeEpisodeImage(getMarkupAttr(tag, attr));
+    if (image) return image;
+  }
+
+  const markup = String(inner || "");
+  const imageTag = markup.match(/<img\\b[^>]*>/i)?.[0];
+  if (imageTag) {
+    for (const attr of ["data-src", "data-original", "data-lazy-src", "src"]) {
+      const image = normalizeEpisodeImage(getMarkupAttr(imageTag, attr));
+      if (image) return image;
+    }
+    const srcset = getMarkupAttr(imageTag, "srcset");
+    if (srcset) {
+      const image = normalizeEpisodeImage(srcset.split(",")[0]?.trim().split(/\\s+/)[0]);
+      if (image) return image;
+    }
+  }
+
+  const style = getMarkupAttr(tag, "style") || getMarkupAttr(inner, "style");
+  const background = style.match(/background-image\\s*:\\s*url\\((?:["']?)(.*?)(?:["']?)\\)/i)?.[1];
+  return normalizeEpisodeImage(background);
+}
+
+function episodeTitleFromMarkup(tag, inner, episodeNumber) {
+  for (const attr of ["data-title", "title", "aria-label"]) {
+    const value = decodeMarkupText(getMarkupAttr(tag, attr));
+    if (value && !/^episode\\s+\\d+$/i.test(value)) return value;
+  }
+
+  const titleSpan = String(inner || "").match(/<span\\b[^>]*class=["'][^"']*\\bd-title\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];
+  const value = decodeMarkupText(titleSpan || inner);
+  return value && !/^episode\\s+\\d+$/i.test(value) ? value : `Episode ${episodeNumber}`;
+}
+
 const MODIFIERS = [
   "ova", "movie", "special", "specials", "tales", "journal", "part", "season", "kanwa", "spin-off", "theatre"
 ];
@@ -210,12 +285,10 @@ export async function getEpisodes(anilistId, ctx = {}) {
     const malAttr = getAttr("mal");
     if (!firstMal && malAttr) firstMal = parseInt(malAttr);
 
-    const titleMatch = inner.match(/<span class="d-title"[^>]*>([\s\S]*?)<\/span>/);
-    const parsedTitle = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, "").trim() : "";
-    const epTitle = parsedTitle || `Episode ${num}`;
+    const epTitle = episodeTitleFromMarkup(tag, inner, num);
 
     const azEp = anizipRes?.episodes?.[String(num)] ?? {};
-    const img = azEp.image || null;
+    const img = episodeImageFromMarkup(tag, inner) || normalizeEpisodeImage(azEp.image) || null;
     const desc = azEp.overview || azEp.summary || null;
     const airDate = azEp.airDate || azEp.airdate || null;
 
