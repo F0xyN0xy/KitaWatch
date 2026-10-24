@@ -7,11 +7,46 @@
   --color-ink-800: #1a1a26;
   --color-ink-700: #262636;
   --color-ink-600: #33334a;
-  --color-accent-300: #d8b4fe;
-  --color-accent-400: #c084fc;
-  --color-accent-500: #a855f7;
-  --color-accent-600: #9333ea;
+  --color-accent-300: var(--user-accent-300, #d8b4fe);
+  --color-accent-400: var(--user-accent-400, #c084fc);
+  --color-accent-500: var(--user-accent-500, #a855f7);
+  --color-accent-600: var(--user-accent-600, #9333ea);
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --user-accent-300: #d8b4fe;
+  --user-accent-400: #c084fc;
+  --user-accent-500: #a855f7;
+  --user-accent-600: #9333ea;
+}
+
+:root[data-theme-accent='blue'] {
+  --user-accent-300: #bfdbfe;
+  --user-accent-400: #93c5fd;
+  --user-accent-500: #3b82f6;
+  --user-accent-600: #2563eb;
+}
+
+:root[data-theme-accent='emerald'] {
+  --user-accent-300: #a7f3d0;
+  --user-accent-400: #6ee7b7;
+  --user-accent-500: #10b981;
+  --user-accent-600: #059669;
+}
+
+:root[data-theme-accent='rose'] {
+  --user-accent-300: #fecdd3;
+  --user-accent-400: #fda4af;
+  --user-accent-500: #f43f5e;
+  --user-accent-600: #e11d48;
+}
+
+:root[data-theme-accent='amber'] {
+  --user-accent-300: #fde68a;
+  --user-accent-400: #fcd34d;
+  --user-accent-500: #f59e0b;
+  --user-accent-600: #d97706;
 }
 
 html {

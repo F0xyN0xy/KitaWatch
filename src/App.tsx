@@ -8,6 +8,7 @@ import { completeLogin, isLoginPending } from '@/services/authFlow';
 import { completeDiscordOAuth } from '@/services/discordAuth';
 import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { Download, X } from 'lucide-react';
 
 // Route-level code splitting: each page is its own chunk, loaded on demand.
@@ -89,6 +90,11 @@ async function handleAuthUrl(rawUrl: string) {
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const themeAccent = useSettingsStore((state) => state.themeAccent);
+
+  useEffect(() => {
+    document.documentElement.dataset.themeAccent = themeAccent;
+  }, [themeAccent]);
   const watchMatch = location.pathname.match(/^\/watch\/([^/]+)\/([^/]+)\/?$/);
   const currentWatchRoute = watchMatch ? { id: watchMatch[1], episode: watchMatch[2] } : null;
   const [lastWatchRoute, setLastWatchRoute] = useState<{ id: string; episode: string } | null>(null);

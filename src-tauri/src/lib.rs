@@ -50,6 +50,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::exchange_anilist_token,
+            commands::download_episode,
             commands::collect_debug_report,
             commands::discord_presence_set,
             commands::discord_presence_clear,

@@ -11,7 +11,8 @@
 //! single paste-able string (Settings → "Copy debug report").
 
 use serde_json::json;
-use std::io::Read as _;
+use std::io::{Read as _, Write as _};
+use futures_util::StreamExt;
 use std::net::TcpStream;
 use std::time::Duration;
 use tauri::Manager;
@@ -87,6 +88,111 @@ pub async fn exchange_anilist_token(
         .as_str()
         .map(String::from)
         .ok_or_else(|| "AniList returned no access_token".to_string())
+}
+
+
+/// Download a direct, non-HLS MP4 file into KitaWatch's app-data downloads folder.
+/// Only HTTPS video/mp4 or application/octet-stream responses are accepted; HLS
+/// manifests, embedded players, and non-HTTPS URLs are deliberately unsupported.
+#[tauri::command]
+pub async fn download_episode(
+    app: tauri::AppHandle,
+    url: String,
+    filename: String,
+    referer: Option<String>,
+) -> Result<String, String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid download URL".to_string())?;
+    if parsed.scheme() != "https" || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Downloads require a public HTTPS media URL".to_string());
+    }
+
+    let safe_stem: String = filename
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(80)
+        .collect();
+    let safe_stem = if safe_stem.is_empty() { "episode-download".to_string() } else { safe_stem };
+    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?.join("downloads");
+    std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .timeout(Duration::from_secs(60 * 60))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut request = client.get(parsed);
+    if let Some(value) = referer {
+        if let Ok(referer_url) = reqwest::Url::parse(&value) {
+            if matches!(referer_url.scheme(), "https" | "http") && referer_url.host_str().is_some() {
+                if let Ok(header) = reqwest::header::HeaderValue::from_str(referer_url.as_str()) {
+                    request = request.header(reqwest::header::REFERER, header);
+                }
+            }
+        }
+    }
+
+    let response = request.send().await.map_err(|e| format!("Download request failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Media server returned {}", response.status()));
+    }
+    if response.url().scheme() != "https" {
+        return Err("The media server redirected to a non-HTTPS URL; download cancelled".to_string());
+    }
+    let content_type = response.headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if content_type != "video/mp4" && content_type != "application/octet-stream" {
+        return Err(format!("Unsupported media type: {}. Only direct MP4 files can be saved.", if content_type.is_empty() { "unknown" } else { &content_type }));
+    }
+
+    const MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+    if response.content_length().is_some_and(|size| size > MAX_BYTES) {
+        return Err("This file exceeds the 2 GiB download limit".to_string());
+    }
+
+    let temp_path = directory.join(format!("{safe_stem}.mp4.part"));
+    let mut file = std::fs::File::create(&temp_path).map_err(|e| e.to_string())?;
+    let mut stream = response.bytes_stream();
+    let mut written: u64 = 0;
+    let stream_result: Result<(), String> = async {
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download interrupted: {e}"))?;
+            written = written.saturating_add(chunk.len() as u64);
+            if written > MAX_BYTES {
+                return Err("This file exceeds the 2 GiB download limit".to_string());
+            }
+            file.write_all(&chunk).map_err(|e| e.to_string())?;
+        }
+        file.flush().map_err(|e| e.to_string())?;
+        Ok(())
+    }.await;
+    drop(file);
+    if let Err(error) = stream_result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    if written == 0 {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err("The media server returned an empty file".to_string());
+    }
+
+    let mut target = directory.join(format!("{safe_stem}.mp4"));
+    let mut suffix = 2;
+    while target.exists() {
+        target = directory.join(format!("{safe_stem}-{suffix}.mp4"));
+        suffix += 1;
+    }
+    std::fs::rename(&temp_path, &target).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        e.to_string()
+    })?;
+    Ok(target.to_string_lossy().into_owned())
 }
 
 /// Probe one local port: TCP connect + tiny HTTP GET (status + body prefix).
