@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type Quality = 'auto' | '1080p' | '720p' | '480p';
+export type ThemeAccent = 'violet' | 'blue' | 'emerald' | 'rose' | 'amber';
 
 /** Provider order for the source list (prefix match on the "server" tag). */
 export const PROVIDER_PRIORITY = [
@@ -54,6 +55,7 @@ function sidecarDefault(env: unknown, fallback: string): string {
 }
 
 interface SettingsState {
+  themeAccent: ThemeAccent;
   defaultQuality: Quality;
   autoplayNext: boolean;
   /** Show subtitles by default in direct-media playback. */
@@ -107,6 +109,7 @@ interface SettingsState {
    * user (Settings only exposes an on/off toggle).
    */
   discordAppId: string;
+  setThemeAccent: (accent: ThemeAccent) => void;
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
   setSubtitleEnabled: (v: boolean) => void;
@@ -135,6 +138,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
+      themeAccent: 'violet',
       defaultQuality: 'auto',
       autoplayNext: true,
       subtitleEnabled: true,
@@ -169,6 +173,7 @@ export const useSettingsStore = create<SettingsState>()(
       // Discord application — users never need a Developer Portal app.
       discordRichPresence: true,
       discordAppId: '1553307716758536202',
+      setThemeAccent: (themeAccent) => set({ themeAccent }),
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
       setSubtitleEnabled: (subtitleEnabled) => set({ subtitleEnabled }),
@@ -198,7 +203,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 11,
+      version: 12,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -250,6 +255,9 @@ export const useSettingsStore = create<SettingsState>()(
           // Existing users get local playback tracking enabled unless they
           // explicitly opt out after this setting is introduced.
           s.autoTrackKitaWatch = s.autoTrackKitaWatch ?? true;
+        }
+        if (version < 12) {
+          s.themeAccent = s.themeAccent ?? 'violet';
         }
         return s as SettingsState;
       },
