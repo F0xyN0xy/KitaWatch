@@ -99,7 +99,7 @@ function episodeImageFromMarkup(tag, inner) {
   }
 
   const style = getMarkupAttr(tag, "style") || getMarkupAttr(inner, "style");
-  const background = style.match(/background-image\s*:\s*url\\((?:["']?)(.*?)(?:["']?)\\)/i)?.[1];
+  const background = style.match(/background-image\s*:\s*url\((?:["']?)(.*?)(?:["']?)\)/i)?.[1];
   return normalizeEpisodeImage(background);
 }
 
