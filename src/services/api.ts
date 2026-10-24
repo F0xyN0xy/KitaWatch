@@ -347,16 +347,18 @@ async function loadEpisodes(id: number, episode: number): Promise<EpisodeSummary
   const byNumber = new Map<number, EpisodeSummary>();
   for (const item of providerResult[0].value) byNumber.set(item.number, { ...item });
 
-  // Merge optional MAL titles without delaying provider artwork/titles.
-  // Provider metadata remains authoritative whenever it has a meaningful title.
-  void titlePromise.then((externalTitles) => {
-    for (const item of externalTitles) {
-      const existing = byNumber.get(item.number);
-      if (existing && !meaningfulEpisodeTitle(existing.title) && item.title) {
-        existing.title = item.title;
-      }
+  // Merge MAL/Jikan titles before returning. The old fire-and-forget merge
+  // mutated a local Map after this function had returned, so React never saw
+  // the updated titles. Awaiting the optional fallback makes the returned
+  // metadata complete and observable by every caller.
+  const externalTitles = await titlePromise;
+  for (const item of externalTitles) {
+    const existing = byNumber.get(item.number) ?? { number: item.number };
+    if (!meaningfulEpisodeTitle(existing.title) && item.title) {
+      existing.title = item.title;
     }
-  });
+    byNumber.set(item.number, existing);
+  }
 
   return [...byNumber.values()].sort((left, right) => left.number - right.number);
 }
