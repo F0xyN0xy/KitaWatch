@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
+import { invoke } from '@tauri-apps/api/core';
+import { Download } from 'lucide-react';
 import Hls from 'hls.js';
 import type { StreamSource, SubtitleTrack } from '@/types';
 import { proxy } from '@/services/api';
@@ -256,6 +258,7 @@ function MediaPlayer({
   const [subtitleSettingsOpen, setSubtitleSettingsOpen] = useState(false);
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(0);
   const [subtitleNotice, setSubtitleNotice] = useState('');
+  const [downloadState, setDownloadState] = useState<{ busy: boolean; message: string }>({ busy: false, message: '' });
   const subtitleEnabled = useSettingsStore((s) => s.subtitleEnabled);
   const subtitleFontSize = useSettingsStore((s) => s.subtitleFontSize);
   const subtitleColor = useSettingsStore((s) => s.subtitleColor);
@@ -280,7 +283,23 @@ function MediaPlayer({
   useEffect(() => {
     setSelectedSubtitleIndex(0);
     setSubtitleNotice('');
+    setDownloadState({ busy: false, message: '' });
   }, [source.url]);
+
+  const downloadEpisode = async () => {
+    if (kind !== 'mp4' || downloadState.busy) return;
+    setDownloadState({ busy: true, message: 'Downloading…' });
+    try {
+      const savedPath = await invoke<string>('download_episode', {
+        url: source.url,
+        filename: `anime-${animeId}-episode-${episodeNumber}`,
+        referer: source.referer ?? null,
+      });
+      setDownloadState({ busy: false, message: `Saved to ${savedPath}` });
+    } catch (error) {
+      setDownloadState({ busy: false, message: error instanceof Error ? error.message : String(error) });
+    }
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -745,6 +764,28 @@ function MediaPlayer({
   return (
     <div className={FRAME_CLASS}>
       <div ref={containerRef} className="aspect-video w-full" />
+      {kind === 'mp4' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 bg-ink-900 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => void downloadEpisode()}
+            disabled={downloadState.busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Save this direct MP4 file for offline playback"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {downloadState.busy ? 'Downloading…' : 'Download MP4'}
+          </button>
+          {downloadState.message && (
+            <p role="status" aria-live="polite" className="min-w-0 flex-1 break-all text-xs text-zinc-400">
+              {downloadState.message}
+            </p>
+          )}
+          {!downloadState.message && (
+            <p className="text-xs text-zinc-500">Direct MP4 only · max 2 GiB</p>
+          )}
+        </div>
+      )}
       {subtitleSettingsHost && subtitles && subtitles.length > 0 && subtitleSettingsOpen && createPortal(
         <div className="pointer-events-auto absolute bottom-12 right-3 z-[100]">
             <div className="w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl bg-black/90 p-4 text-sm text-white shadow-2xl ring-1 ring-white/20">
