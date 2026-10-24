@@ -54,9 +54,9 @@ function decodeMarkupText(value) {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
-    .replace(/\\s+/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -85,7 +85,7 @@ function episodeImageFromMarkup(tag, inner) {
   }
 
   const markup = String(inner || "");
-  const imageTag = markup.match(/<img\\b[^>]*>/i)?.[0];
+  const imageTag = markup.match(/<img\b[^>]*>/i)?.[0];
   if (imageTag) {
     for (const attr of ["data-src", "data-original", "data-lazy-src", "src"]) {
       const image = normalizeEpisodeImage(getMarkupAttr(imageTag, attr));
@@ -93,25 +93,25 @@ function episodeImageFromMarkup(tag, inner) {
     }
     const srcset = getMarkupAttr(imageTag, "srcset");
     if (srcset) {
-      const image = normalizeEpisodeImage(srcset.split(",")[0]?.trim().split(/\\s+/)[0]);
+      const image = normalizeEpisodeImage(srcset.split(",")[0]?.trim().split(/\s+/)[0]);
       if (image) return image;
     }
   }
 
   const style = getMarkupAttr(tag, "style") || getMarkupAttr(inner, "style");
-  const background = style.match(/background-image\\s*:\\s*url\\((?:["']?)(.*?)(?:["']?)\\)/i)?.[1];
+  const background = style.match(/background-image\s*:\s*url\\((?:["']?)(.*?)(?:["']?)\\)/i)?.[1];
   return normalizeEpisodeImage(background);
 }
 
 function episodeTitleFromMarkup(tag, inner, episodeNumber) {
   for (const attr of ["data-title", "title", "aria-label"]) {
     const value = decodeMarkupText(getMarkupAttr(tag, attr));
-    if (value && !/^episode\\s+\\d+$/i.test(value)) return value;
+    if (value && !/^episode\s+\d+$/i.test(value)) return value;
   }
 
-  const titleSpan = String(inner || "").match(/<span\\b[^>]*class=["'][^"']*\\bd-title\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];
+  const titleSpan = String(inner || "").match(/<span\b[^>]*class=["'][^"']*\bd-title\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
   const value = decodeMarkupText(titleSpan || inner);
-  return value && !/^episode\\s+\\d+$/i.test(value) ? value : `Episode ${episodeNumber}`;
+  return value && !/^episode\s+\d+$/i.test(value) ? value : `Episode ${episodeNumber}`;
 }
 
 const MODIFIERS = [
