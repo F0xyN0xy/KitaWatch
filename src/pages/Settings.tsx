@@ -45,6 +45,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function Settings() {
   const {
+    themeAccent,
+    setThemeAccent,
     defaultQuality,
     autoplayNext,
     subtitleEnabled,
@@ -252,6 +254,29 @@ export default function Settings() {
             </p>
           </div>
           <Toggle on={autoTrackKitaWatch} onChange={setAutoTrackKitaWatch} />
+        </div>
+      </Section>
+
+      <Section title="Appearance">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-300">Accent color</p>
+            <p className="text-xs text-zinc-600">
+              Customize buttons, highlights, focus rings, and other accent details.
+            </p>
+          </div>
+          <select
+            aria-label="Theme accent color"
+            value={themeAccent}
+            onChange={(e) => setThemeAccent(e.target.value as typeof themeAccent)}
+            className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+          >
+            <option value="violet">Violet (default)</option>
+            <option value="blue">Ocean blue</option>
+            <option value="emerald">Emerald</option>
+            <option value="rose">Rose</option>
+            <option value="amber">Amber</option>
+          </select>
         </div>
       </Section>
 
