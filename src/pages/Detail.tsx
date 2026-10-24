@@ -20,22 +20,16 @@ import type { AnimeSummary, EpisodeSummary } from '@/types';
 // (serial fallback made the page sit silent for up to ~50s on failures).
 const fetchInfo = fetchAnimeInfo;
 
-/** When every provider's episode list fails, fall back to AniList's episode
- *  count so playback can still be attempted by number (extract works by
- *  anilist ID + episode number alone). Thumbnails fall back to the cover.
- *  Capped at the latest AIRED episode for ongoing shows (nextAiring = first
- *  unaired ep) — same rule as the watch page's episode strip. */
+/** Fall back to numbered episodes when providers have no episode list.
+ *  Episode artwork is intentionally NOT replaced with the anime cover: that
+ *  made every episode look identical and falsely implied episode-specific art. */
 function fallbackEpisodes(
   total: number | undefined,
-  cover: string | undefined,
   nextAiring?: number,
 ): EpisodeSummary[] {
   const latest = nextAiring ? Math.min(nextAiring - 1, total ?? Infinity) : total;
   if (!latest || latest <= 0 || latest > 5000) return [];
-  return Array.from({ length: latest }, (_, i) => ({
-    number: i + 1,
-    thumbnail: cover,
-  }));
+  return Array.from({ length: latest }, (_, i) => ({ number: i + 1 }));
 }
 
 /** Popover for adding the anime to any of the user's custom lists. */
@@ -128,6 +122,14 @@ function ListPicker({ anime }: { anime: AnimeSummary }) {
 export default function Detail() {
   const { id } = useParams<{ id: string }>();
   const info = useApi(() => fetchInfo(id!), [id]);
+  // Load actual provider episode metadata for the detail grid too. Previously
+  // this page only generated numbered placeholders, so real titles and images
+  // returned by the API were never displayed here.
+  const episodeMetadata = useApi(
+    () => (id ? api.episodes(Number(id), 1) : Promise.resolve([])),
+    [id],
+    { retries: 1 },
+  );
   const { favorites, toggleFavorite } = useAnimeStore();
   // Latest watched episode — the Play button resumes instead of restarting.
   const resumeEpisode = useHistoryStore((s) =>
@@ -158,10 +160,23 @@ export default function Detail() {
 
   const a = info.data;
   const favorite = a ? favorites.some((f) => f.id === a.id) : false;
-  // Episode grid comes from AniList's official count — always reliable.
-  const shownEpisodes: EpisodeSummary[] = info.loading
-    ? []
-    : fallbackEpisodes(a?.totalEpisodes, a?.cover, a?.nextAiringEpisode);
+  // Start with AniList's episode count, then overlay real provider/Jikan
+  // metadata as it arrives. If AniList lacks a count, provider episodes still
+  // populate the grid. Never copy the anime cover into every episode card.
+  const shownEpisodes: EpisodeSummary[] = (() => {
+    if (info.loading) return [];
+    const merged = new Map<number, EpisodeSummary>(
+      fallbackEpisodes(a?.totalEpisodes, a?.nextAiringEpisode).map(
+        (ep) => [ep.number, ep] as const,
+      ),
+    );
+    for (const ep of episodeMetadata.data ?? []) {
+      if (a?.totalEpisodes && ep.number > a.totalEpisodes) continue;
+      if (a?.nextAiringEpisode && ep.number >= a.nextAiringEpisode) continue;
+      merged.set(ep.number, { ...merged.get(ep.number), ...ep, number: ep.number });
+    }
+    return [...merged.values()].sort((left, right) => left.number - right.number);
+  })();
 
   // AniList-direct recommendations (covers guaranteed); Kuhi as fallback
   const recommendations = useApi<AnimeSummary[]>(
@@ -182,29 +197,29 @@ export default function Detail() {
 
   return (
     <PageContainer className="!space-y-0 !p-0">
-      {/* Banner */}
-      <div className="relative h-72 overflow-hidden">
+      {/* Banner is a separate background section, not an overlapping layer. */}
+      <div className="relative h-44 overflow-hidden sm:h-60">
         {info.loading ? (
           <Skeleton className="h-full rounded-none" />
         ) : (
           <>
-            {a?.banner || a?.cover ? (
+            {a?.banner ? (
               <img
-                src={a?.banner ?? a?.cover}
+                src={a.banner}
                 alt=""
-                className="h-full w-full object-cover object-center"
+                className="absolute inset-0 h-full w-full object-cover object-center"
               />
             ) : (
-              <div className="h-full bg-ink-800" />
+              <div className="absolute inset-0 bg-ink-800" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/50 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 via-ink-950/20 to-transparent" />
           </>
         )}
       </div>
 
-      <div className="space-y-8 px-6 pb-6">
-        {/* Header */}
-        <div className="-mt-20 flex flex-col gap-6 sm:flex-row">
+      <div className="space-y-8 px-6 pb-6 pt-6">
+        {/* Header: title and cover sit below the banner so neither can be obscured. */}
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
           {info.loading ? (
             <Skeleton className="aspect-[2/3] w-40 rounded-xl" />
           ) : (
@@ -214,7 +229,7 @@ export default function Detail() {
               className="aspect-[2/3] w-40 rounded-xl object-cover shadow-2xl ring-1 ring-white/10"
             />
           )}
-          <div className="flex min-w-0 flex-1 flex-col justify-end pt-20 sm:pt-0">
+          <div className="flex min-w-0 flex-1 flex-col justify-center">
             {info.loading ? (
               <Skeleton className="h-9 w-72" />
             ) : (
@@ -316,13 +331,17 @@ export default function Detail() {
                   className="group overflow-hidden rounded-xl bg-ink-850 ring-1 ring-white/5 transition hover:ring-accent-500/60"
                 >
                   <div className="aspect-video overflow-hidden bg-ink-800">
-                    {ep.thumbnail && (
+                    {ep.thumbnail ? (
                       <img
                         src={ep.thumbnail}
                         alt=""
                         loading="lazy"
                         className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-zinc-600">
+                        Episode artwork unavailable
+                      </div>
                     )}
                   </div>
                   <div className="p-2.5">
