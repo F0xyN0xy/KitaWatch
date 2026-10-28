@@ -6,6 +6,7 @@ import {
   Flame,
   Bookmark,
   Settings,
+  Newspaper,
 } from 'lucide-react';
 import Disclaimer from '@/components/ui/Disclaimer';
 
@@ -90,6 +91,14 @@ export default function Sidebar() {
             </div>
           );
         })}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('kitawatch:open-whats-new'))}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-zinc-400 transition hover:bg-ink-800 hover:text-zinc-100"
+        >
+          <Newspaper className="h-4.5 w-4.5" />
+          What’s New
+        </button>
       </nav>
 
       <div className="mt-auto space-y-2 p-4">
