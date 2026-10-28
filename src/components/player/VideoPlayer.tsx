@@ -671,7 +671,10 @@ function MediaPlayer({
     let cancelled = false;
     let blobUrl: string | null = null;
     const loadTrack = async () => {
-      for (const candidate of [track.url, proxy.segment(track.url)]) {
+      for (const candidate of [
+        track.url,
+        proxy.segment(track.url, source.referer ?? ''),
+      ]) {
         try {
           const response = await fetch(candidate);
           if (!response.ok) continue;
