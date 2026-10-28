@@ -35,7 +35,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl bg-ink-900 p-4 ring-1 ring-white/5">
+    <section className="rounded-xl border border-white/10 bg-ink-900/90 p-5">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
         {title}
       </h2>
@@ -145,7 +145,11 @@ export default function Settings() {
   return (
     <PageContainer className="!space-y-5 !p-4 md:!p-6">
       <div className="mx-auto w-full max-w-5xl space-y-5">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
+      <header className="border-b border-white/10 pb-4">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-300">Preferences</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Settings</h1>
+        <p className="mt-2 max-w-xl text-sm text-zinc-500">Make KitaWatch feel like yours. Your preferences are saved locally on this device.</p>
+      </header>
       {note && (
         <p className="rounded-lg bg-ink-900 px-4 py-2 text-sm text-accent-300 ring-1 ring-accent-500/30">
           {note}
