@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
-import 'artplayer/dist/artplayer.css';
 import { invoke } from '@tauri-apps/api/core';
 import { Download } from 'lucide-react';
 import Hls from 'hls.js';
@@ -20,7 +19,7 @@ let jassubLoader: Promise<void> | null = null;
 
 function loadJassub(): Promise<void> {
   if (!jassubLoader) {
-    // jassub is not an npm dependency (it was never installed) — load the
+    // jassub is not an npm dependency (it was never installed) 窶・load the
     // UMD build from the CDN at runtime instead of importing it, so the
     // bundler never has to resolve it. Failure rejects and the caller
     // falls back to "no subtitles".
@@ -177,7 +176,7 @@ function EmbedPlayer({ source, onFatal }: Pick<Props, 'source' | 'onFatal'>) {
           visible instead of guessing. */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 bg-ink-900 px-3 py-2 text-xs text-zinc-500">
         <span>
-          {loaded ? 'Embedded player' : 'Loading embedded player'} · {host}. Blank? The provider may
+          {loaded ? 'Embedded player' : 'Loading embedded player'} ﾂｷ {host}. Blank? The provider may
           block embedding.
         </span>
         <span className="flex gap-3">
@@ -289,7 +288,7 @@ function MediaPlayer({
 
   const downloadEpisode = async () => {
     if (kind !== 'mp4' || downloadState.busy) return;
-    setDownloadState({ busy: true, message: 'Downloading…' });
+    setDownloadState({ busy: true, message: 'Downloading窶ｦ' });
     try {
       const savedPath = await invoke<string>('download_episode', {
         url: source.url,
@@ -332,10 +331,10 @@ function MediaPlayer({
       // Subtitles: remote subtitle hosts are usually CORS-locked, and a failed
       // subtitle fetch used to crash the entire player. Pull the first track
       // into a blob URL (direct first, local proxy as fallback) so a failure
-      // just means "no subtitles" — the video still plays.
+      // just means "no subtitles" 窶・the video still plays.
       if (sub && subType && subType !== 'ass') {
         // Second candidate goes through the playback proxy (no host
-        // allowlist), not /cors — subtitle CDNs like dragonatepizza.online
+        // allowlist), not /cors 窶・subtitle CDNs like dragonatepizza.online
         // rotate hosts exactly like segment CDNs do and would 403 on the
         // /cors allowlist.
         for (const candidate of [sub.url, proxy.segment(sub.url)]) {
@@ -544,7 +543,7 @@ function MediaPlayer({
           try {
             player.fullscreen = true;
           } catch {
-            /* rejected without a gesture — stay windowed */
+            /* rejected without a gesture 窶・stay windowed */
           }
         }
         player.off('video:play', tryRestoreFullscreen);
@@ -578,7 +577,7 @@ function MediaPlayer({
       player.video.addEventListener('loadedmetadata', onMeta, { once: true });
       disposers.push(() => player.video.removeEventListener('loadedmetadata', onMeta));
 
-      // save position — throttled to ~every 10s, plus a final save on
+      // save position 窶・throttled to ~every 10s, plus a final save on
       // pause/ended so the resume point is fresh.
       let lastPosSave = 0;
       const savePosition = (force = false) => {
@@ -618,7 +617,7 @@ function MediaPlayer({
 
     void init();
 
-    // Cleanup is registered synchronously here — never from inside the async
+    // Cleanup is registered synchronously here 窶・never from inside the async
     // init (React ignores a function returned from a promise).
     return () => {
       cancelled = true;
@@ -718,7 +717,7 @@ function MediaPlayer({
   }, [art, subtitles?.length]);
 
   // intro/outro skip buttons (AniSkip data). Only visible while the
-  // playhead is inside the skip window — no permanent button clutter.
+  // playhead is inside the skip window 窶・no permanent button clutter.
   // Keyed on the player *instance* (state), because the instance is created
   // asynchronously and a ref read here would usually still be null.
   // No data (AniSkip 404) simply means no buttons.
@@ -729,8 +728,8 @@ function MediaPlayer({
     const playerElement = art?.template.$player;
     if (!playerElement || !skips) return;
     const specs = [
-      { interval: skips.op, label: 'Skip intro →' },
-      { interval: skips.ed, label: 'Skip outro →' },
+      { interval: skips.op, label: 'Skip intro' },
+      { interval: skips.ed, label: 'Skip outro' },
     ];
     const btns: { interval: { start: number; end: number }; el: HTMLButtonElement }[] = [];
     for (const spec of specs) {
@@ -775,7 +774,7 @@ function MediaPlayer({
             title="Save this direct MP4 file for offline playback"
           >
             <Download className="h-3.5 w-3.5" />
-            {downloadState.busy ? 'Downloading…' : 'Download MP4'}
+            {downloadState.busy ? 'Downloading窶ｦ' : 'Download MP4'}
           </button>
           {downloadState.message && (
             <p role="status" aria-live="polite" className="min-w-0 flex-1 break-all text-xs text-zinc-400">
@@ -783,7 +782,7 @@ function MediaPlayer({
             </p>
           )}
           {!downloadState.message && (
-            <p className="text-xs text-zinc-500">Direct MP4 only · max 2 GiB</p>
+            <p className="text-xs text-zinc-500">Direct MP4 only ﾂｷ max 2 GiB</p>
           )}
         </div>
       )}
