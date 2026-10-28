@@ -30,21 +30,34 @@ if (existsSync(apiDir) && existsSync(path.join(apiDir, '.git'))) {
   git(['clone', FORK_URL, apiDir]);
 }
 
-const venvPython = path.join(
-  apiDir,
-  '.venv',
-  process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3',
+const basePython = process.env.KITAWATCH_PYTHON || (process.platform === 'win32' ? 'py' : 'python3');
+const pythonArgs = process.env.KITAWATCH_PYTHON
+  ? []
+  : process.platform === 'win32' ? ['-3.12'] : [];
+const venvPythonFor = (dir) => path.join(
+  dir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3',
 );
-const python =
-  process.env.KITAWATCH_PYTHON ||
-  (existsSync(venvPython) ? venvPython : '') ||
-  (process.platform === 'win32' ? 'python' : 'python3');
 
-console.log(`[setup:api] Installing Python dependencies (${python} -m pip)...`);
-execFileSync(python, ['-m', 'pip', 'install', '-r', 'requirements.txt'], {
-  cwd: apiDir,
-  stdio: 'inherit',
-});
+function ensureVenv(dir, label) {
+  const venvPython = venvPythonFor(dir);
+  if (!existsSync(venvPython)) {
+    console.log(`[setup:api] Creating isolated Python environment for ${label}...`);
+    execFileSync(basePython, [...pythonArgs, '-m', 'venv', '.venv'], { cwd: dir, stdio: 'inherit' });
+  }
+  console.log(`[setup:api] Installing ${label} dependencies in ${venvPython}...`);
+  execFileSync(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip'], { cwd: dir, stdio: 'inherit' });
+  execFileSync(venvPython, ['-m', 'pip', 'install', '--upgrade', '-r', 'requirements.txt'], { cwd: dir, stdio: 'inherit' });
+  execFileSync(venvPython, ['-m', 'pip', 'check'], { cwd: dir, stdio: 'inherit' });
+}
 
-console.log('[setup:api] Done. Start the API with: npm run api');
-console.log('[setup:api] (The Tauri app also auto-starts it when the port is free.)');
+// Each Python service gets its own environment. This prevents unrelated global
+// packages (especially pydantic and pydantic-core) from breaking either service.
+ensureVenv(apiDir, 'Kuhi API');
+const proxyDir = path.join(root, 'proxy');
+if (existsSync(path.join(proxyDir, 'requirements.txt'))) {
+  ensureVenv(proxyDir, 'proxy');
+}
+
+console.log('[setup:api] Done. Python services use isolated .venv environments.');
+console.log('[setup:api] Start the API with: npm run api');
+console.log('[setup:api] (The Tauri app also auto-starts it when the ports are free.)');
