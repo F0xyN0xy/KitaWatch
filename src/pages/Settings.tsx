@@ -14,6 +14,7 @@ import { getDebugReport } from '@/services/debug';
 import { setFullscreenRemember } from '@/services/windowState';
 import DiscordAccount from '@/components/DiscordAccount';
 import ProviderStatusPanel from '@/components/ProviderStatusPanel';
+import SystemCheckPanel from '@/components/SystemCheckPanel';
 
 const QUALITIES: Quality[] = ['auto', '1080p', '720p', '480p'];
 
@@ -353,6 +354,8 @@ export default function Settings() {
       </Section>
 
       <DiscordAccount />
+
+      <SystemCheckPanel />
 
       <ProviderStatusPanel />
 
