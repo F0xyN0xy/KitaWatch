@@ -37,7 +37,13 @@ const triple = (() => {
 const ext = process.platform === 'win32' ? '.exe' : '';
 const outDir = path.join(root, 'src-tauri', 'binaries');
 mkdirSync(outDir, { recursive: true });
-const py = process.env.KITAWATCH_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+const basePy = process.env.KITAWATCH_PYTHON || (process.platform === 'win32' ? 'py' : 'python3');
+const basePyArgs = process.env.KITAWATCH_PYTHON ? [] : process.platform === 'win32' ? ['-3.12'] : [];
+const pythonFor = (dir) => {
+  const candidate = path.join(dir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3');
+  if (existsSync(candidate)) return { executable: candidate, prefixArgs: [] };
+  return { executable: basePy, prefixArgs: basePyArgs };
+};
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 const entries = [
@@ -58,12 +64,14 @@ for (const e of entries) {
     entryFile,
     `import os\nimport sys\nimport multiprocessing\n\nif __name__ == "__main__":\n    multiprocessing.freeze_support()\n    # windowed (--noconsole) apps have no stdout on Windows; uvicorn's log\n    # formatter calls sys.stdout.isatty() and crashes without one.\n    # When the launcher sets KITAWATCH_LOG_DIR, mirror stdout/stderr to\n    # <dir>/<name>.log so users have something to paste into bug reports;\n    # otherwise fall back to the null device.\n    if sys.stdout is None:\n        log_dir = os.environ.get("KITAWATCH_LOG_DIR", "")\n        if log_dir:\n            os.makedirs(log_dir, exist_ok=True)\n            _log = open(os.path.join(log_dir, os.environ.get("LOG_NAME", "${e.name}") + ".log"), "a", buffering=1)\n            sys.stdout = _log\n            sys.stderr = _log\n        else:\n            sys.stdout = open(os.devnull, "w")\n            sys.stderr = open(os.devnull, "w")\n    import uvicorn\n    import ${mod}\n    uvicorn.run(${mod}.${attr}, host="127.0.0.1", port=int(os.environ.get("PORT", "${e.port}")), log_level=os.environ.get("LOG_LEVEL", "warning"))\n`,
   );
-  console.log(`[sidecars] pyinstaller: ${e.name} ...`);
-  // execFileSync with an args array: no shell, so paths/values from env or
-  // the filesystem can never be reinterpreted (CWE-78).
+  const py = pythonFor(e.dir);
+  console.log(`[sidecars] pyinstaller: ${e.name} using ${py.executable} ...`);
+  // Use the same isolated environment as the running sidecar so packaged
+  // builds cannot silently pick up incompatible global Pydantic packages.
   execFileSync(
-    py,
+    py.executable,
     [
+      ...py.prefixArgs,
       '-m', 'PyInstaller',
       '--onefile', '--noconsole', '--noconfirm', '--clean',
       '--name', e.name,
