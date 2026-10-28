@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink-950: #0a0a0f;
-  --color-ink-900: #101018;
-  --color-ink-850: #14141d;
-  --color-ink-800: #1a1a26;
-  --color-ink-700: #262636;
-  --color-ink-600: #33334a;
+  --color-ink-950: var(--surface-950, #17151d);
+  --color-ink-900: var(--surface-900, #201d27);
+  --color-ink-850: var(--surface-850, #25212d);
+  --color-ink-800: var(--surface-800, #2b2733);
+  --color-ink-700: var(--surface-700, #393442);
+  --color-ink-600: var(--surface-600, #4b4356);
   --color-accent-300: var(--user-accent-300, #d8b4fe);
   --color-accent-400: var(--user-accent-400, #c084fc);
   --color-accent-500: var(--user-accent-500, #a855f7);
@@ -15,10 +15,34 @@
 }
 
 :root {
+  --surface-950: #17151d;
+  --surface-900: #201d27;
+  --surface-850: #25212d;
+  --surface-800: #2b2733;
+  --surface-700: #393442;
+  --surface-600: #4b4356;
   --user-accent-300: #d8b4fe;
   --user-accent-400: #c084fc;
   --user-accent-500: #a855f7;
   --user-accent-600: #9333ea;
+}
+
+:root[data-theme-style='midnight'] {
+  --surface-950: #10131b;
+  --surface-900: #171c27;
+  --surface-850: #1d2330;
+  --surface-800: #242c3a;
+  --surface-700: #333e50;
+  --surface-600: #45546a;
+}
+
+:root[data-theme-style='graphite'] {
+  --surface-950: #171717;
+  --surface-900: #202020;
+  --surface-850: #262626;
+  --surface-800: #2e2e2e;
+  --surface-700: #3d3d3d;
+  --surface-600: #505050;
 }
 
 :root[data-theme-accent='blue'] {
@@ -50,7 +74,7 @@
 }
 
 html {
-  background: #0a0a0f;
+  background: var(--surface-950, #17151d);
 }
 
 html,
@@ -68,18 +92,18 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--surface-950, #17151d);
 }
 ::-webkit-scrollbar-thumb {
-  background: #26263a;
+  background: var(--surface-700, #393442);
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #33334a;
+  background: var(--surface-600, #4b4356);
 }
 
 ::selection {
-  background: rgba(168, 85, 247, 0.35);
+  background: color-mix(in srgb, var(--user-accent-500, #a855f7) 35%, transparent);
 }
 
 .no-scrollbar::-webkit-scrollbar {
