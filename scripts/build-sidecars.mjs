@@ -65,6 +65,11 @@ for (const e of entries) {
     `import os\nimport sys\nimport multiprocessing\n\nif __name__ == "__main__":\n    multiprocessing.freeze_support()\n    # windowed (--noconsole) apps have no stdout on Windows; uvicorn's log\n    # formatter calls sys.stdout.isatty() and crashes without one.\n    # When the launcher sets KITAWATCH_LOG_DIR, mirror stdout/stderr to\n    # <dir>/<name>.log so users have something to paste into bug reports;\n    # otherwise fall back to the null device.\n    if sys.stdout is None:\n        log_dir = os.environ.get("KITAWATCH_LOG_DIR", "")\n        if log_dir:\n            os.makedirs(log_dir, exist_ok=True)\n            _log = open(os.path.join(log_dir, os.environ.get("LOG_NAME", "${e.name}") + ".log"), "a", buffering=1)\n            sys.stdout = _log\n            sys.stderr = _log\n        else:\n            sys.stdout = open(os.devnull, "w")\n            sys.stderr = open(os.devnull, "w")\n    import uvicorn\n    import ${mod}\n    uvicorn.run(${mod}.${attr}, host="127.0.0.1", port=int(os.environ.get("PORT", "${e.port}")), log_level=os.environ.get("LOG_LEVEL", "warning"))\n`,
   );
   const py = pythonFor(e.dir);
+  console.log(`[sidecars] preparing PyInstaller in ${py.executable} ...`);
+  execFileSync(py.executable, [...py.prefixArgs, '-m', 'pip', 'install', '--upgrade', 'pyinstaller'], {
+    cwd: e.dir,
+    stdio: 'inherit',
+  });
   console.log(`[sidecars] pyinstaller: ${e.name} using ${py.executable} ...`);
   // Use the same isolated environment as the running sidecar so packaged
   // builds cannot silently pick up incompatible global Pydantic packages.
