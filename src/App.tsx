@@ -10,6 +10,11 @@ import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Download, X } from 'lucide-react';
+import packageJson from '../package.json';
+import WhatsNewDialog from '@/components/WhatsNewDialog';
+
+const APP_VERSION = packageJson.version;
+const WHATS_NEW_EVENT = 'kitawatch:open-whats-new';
 
 // Route-level code splitting: each page is its own chunk, loaded on demand.
 const Home = lazy(() => import('@/pages/Home'));
@@ -101,6 +106,7 @@ export default function App() {
   const currentWatchRoute = watchMatch ? { id: watchMatch[1], episode: watchMatch[2] } : null;
   const [lastWatchRoute, setLastWatchRoute] = useState<{ id: string; episode: string } | null>(null);
   const [playerDismissed, setPlayerDismissed] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const isWatchRoute = currentWatchRoute !== null;
   const playerRoute = currentWatchRoute ?? (playerDismissed ? null : lastWatchRoute);
 
@@ -112,6 +118,28 @@ export default function App() {
   }, [location.pathname]);
 
   const { state: updater, install, dismiss } = useUpdater();
+
+  useEffect(() => {
+    const seenKey = `kitawatch:whats-new-seen:${APP_VERSION}`;
+    try {
+      if (localStorage.getItem(seenKey) !== 'true') setWhatsNewOpen(true);
+    } catch {
+      // Storage may be unavailable in restricted environments; announcements remain manually accessible.
+    }
+
+    const openWhatsNew = () => setWhatsNewOpen(true);
+    window.addEventListener(WHATS_NEW_EVENT, openWhatsNew);
+    return () => window.removeEventListener(WHATS_NEW_EVENT, openWhatsNew);
+  }, []);
+
+  const closeWhatsNew = () => {
+    try {
+      localStorage.setItem(`kitawatch:whats-new-seen:${APP_VERSION}`, 'true');
+    } catch {
+      // Do not block app use if local storage is unavailable.
+    }
+    setWhatsNewOpen(false);
+  };
 
   // Measure the shared shell during development without adding production console noise.
   useEffect(() => {
@@ -249,6 +277,7 @@ export default function App() {
           )}
         </ErrorBoundary>
       </div>
+      <WhatsNewDialog open={whatsNewOpen} appVersion={APP_VERSION} onClose={closeWhatsNew} />
       {/* Update banner */}
       {(updater.kind === 'available' || updater.kind === 'installing' || updater.kind === 'installed') && (
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-xl bg-ink-850 px-4 py-3 shadow-2xl ring-1 ring-accent-500/40">
