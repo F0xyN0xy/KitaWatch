@@ -1,274 +1,516 @@
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="referrer" content="no-referrer" />
-<title>KitaWatch — Desktop Anime Streaming</title>
-<meta name="description" content="KitaWatch: a local-first, cross-platform desktop anime streaming client. No accounts, no servers, no ads — automatic updates." />
-<meta property="og:type" content="website" />
-<meta property="og:site_name" content="KitaWatch" />
-<meta property="og:title" content="KitaWatch — Desktop Anime Streaming" />
-<meta property="og:description" content="A local-first, cross-platform anime streaming client for Windows & Linux. No servers, no ads, auto-updating. Free & open source." />
-<meta property="og:url" content="https://kitawatch.free.nf" />
-<meta property="og:image" content="https://kitawatch.free.nf/banner.png" />
-<meta property="og:image:width" content="2048" />
-<meta property="og:image:height" content="1024" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="theme-color" content="#0a0a0f" />
-<link rel="icon" type="image/png" href="banner.png" />
-<link rel="icon" type="image/x-icon" href="/favicon.ico">
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet" />
-<style>
-  :root { --accent:#9333ea; --accent2:#c084fc; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#0a0a0f; color:#e4e4e7; }
-  .glow { text-shadow:0 0 30px rgba(168,85,247,.55), 0 0 80px rgba(168,85,247,.25); }
-  .card { background:rgba(20,20,29,.7); border:1px solid rgba(255,255,255,.06); backdrop-filter: blur(12px); }
-  .btn-primary { background:linear-gradient(135deg,#9333ea,#c026d3); box-shadow:0 8px 30px rgba(147,51,234,.35); transition:.2s; }
-  .btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 40px rgba(147,51,234,.5); }
-  .btn-ghost { border:1px solid rgba(255,255,255,.12); transition:.2s; }
-  .btn-ghost:hover { border-color:rgba(192,132,252,.6); color:#fff; }
-  .grid-bg { background-image:radial-gradient(rgba(168,85,247,.12) 1px, transparent 1px); background-size:28px 28px; }
-  ::selection { background:rgba(168,85,247,.4); }
-</style>
-</head>
-<body class="antialiased overflow-x-hidden">
-
-<!-- NAV -->
-<nav class="fixed top-0 z-50 w-full border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur">
-  <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-    <span class="text-lg font-extrabold tracking-tight text-white">Kita<span class="text-purple-400">Watch</span></span>
-
-    <!-- hamburger (mobile, pure CSS) -->
-    <input type="checkbox" id="nav-toggle" class="peer hidden" />
-    <label for="nav-toggle" class="cursor-pointer text-zinc-300 hover:text-white sm:hidden" aria-label="Menu">
-      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-    </label>
-
-    <div class="absolute left-0 right-0 top-16 hidden flex-col gap-1 border-b border-white/5 bg-[#0a0a0f]/95 p-4 backdrop-blur peer-checked:flex sm:static sm:flex sm:flex-row sm:items-center sm:gap-5 sm:border-0 sm:bg-transparent sm:p-0 text-sm">
-      <a href="#features" class="rounded-lg px-3 py-2 text-zinc-400 hover:bg-white/5 hover:text-white">Features</a>
-      <a href="#download" class="rounded-lg px-3 py-2 text-zinc-400 hover:bg-white/5 hover:text-white">Download</a>
-      <a href="https://github.com/F0xyN0xy/KitaWatch" target="_blank" rel="noreferrer" class="rounded-lg px-3 py-2 text-zinc-400 hover:bg-white/5 hover:text-white">GitHub</a>
-      <a href="https://github.com/F0xyN0xy/KitaWatch/issues" target="_blank" rel="noreferrer"
-         class="rounded-lg border border-white/10 px-3 py-2 text-zinc-300 hover:border-purple-500/60 hover:text-white sm:py-1.5">Report a bug</a>
-    </div>
-  </div>
-</nav>
-
-<!-- HERO -->
-<header class="grid-bg relative overflow-hidden pt-16">
-  <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0f]/40 to-[#0a0a0f]"></div>
-  <div class="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[1.2fr_1fr] lg:pb-20">
-    <div>
-      <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-300">
-        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-        v<span id="ver">…</span> — latest release
-      </p>
-      <h1 class="glow text-4xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
-        Anime, <span class="text-purple-400">locally.</span>
-      </h1>
-      <p class="mt-5 max-w-xl text-lg leading-relaxed text-zinc-400">
-        A desktop anime streaming client for Windows and Linux. No central servers, no accounts,
-        no ads — every backend runs on <em class="text-zinc-200 not-italic">your</em> machine.
-        Streams resolve from a chain of independent providers with automatic failover,
-        and the app keeps itself updated.
-      </p>
-      <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <a id="dl-main" href="#download"
-           class="btn-primary inline-flex items-center justify-center gap-2.5 rounded-xl px-6 py-3.5 text-center font-semibold text-white">
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12h3v7H3zm4.5-7h3v14h-3zM12 5h3v14h-3zm4.5 4h3v10h-3z"/></svg>
-          Download for Windows
-        </a>
-        <a href="#download" class="btn-ghost inline-flex items-center justify-center gap-2.5 rounded-xl px-6 py-3.5 text-center font-semibold text-zinc-200">
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-6h2v6zm4 0h-2V7h2v10z"/></svg>
-          Linux builds
-        </a>
-      </div>
-      <p class="mt-4 text-xs text-zinc-500">Free · Open source (non-commercial) · Auto-updating · ~15 s first-launch setup</p>
-    </div>
-    <div class="relative hidden lg:block">
-      <img src="banner.png" alt="KitaWatch" class="w-full rounded-2xl border border-white/10 shadow-2xl shadow-purple-900/40" />
-      <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-purple-500/20"></div>
-    </div>
-  </div>
-</header>
-
-<!-- FEATURES -->
-<section id="features" class="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-  <h2 class="text-3xl font-bold text-white">Everything runs on <span class="text-purple-400">your</span> machine</h2>
-  <p class="mt-2 max-w-2xl text-zinc-400">KitaWatch ships with its own backends bundled — nothing to install, nothing to configure, nothing phoning home.</p>
-
-  <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">Seven-backend resolver</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">Kuhi, Anivexa, 1anime, AniKage, Consumet, animepahe and an optional torrent fallback — if one source fails, the next one catches.</p>
-    </div>
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">A real player</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">HLS with server switching, fatal-error auto-failover, skip intro/outro (AniSkip), keyboard shortcuts, styled ASS subtitles, PiP and screenshots.</p>
-    </div>
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">AniList, your way</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">Optional login to sync favorites both ways — you always authenticate with your own account. Works fully offline of it, too.</p>
-    </div>
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">Local-first &amp; private</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">All backends run on localhost. No analytics, no telemetry, no accounts. Your list and history never leave your device.</p>
-    </div>
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">Self-updating</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">Cryptographically signed updates from GitHub Releases. Install once — stay current forever.</p>
-    </div>
-    <div class="card rounded-2xl p-6">
-      <h3 class="font-semibold text-white">See what works</h3>
-      <p class="mt-2 text-sm leading-relaxed text-zinc-400">A built-in provider probe shows which backends carry any anime before you press play.</p>
-    </div>
-  </div>
-</section>
-
-<!-- DOWNLOAD -->
-<section id="download" class="border-y border-white/5 bg-[#0d0d14] py-14 sm:py-20">
-  <div class="mx-auto max-w-6xl px-4 sm:px-6">
-    <h2 class="text-3xl font-bold text-white">Download</h2>
-    <p class="mt-2 text-zinc-400">Latest release: <span class="font-mono text-purple-300" id="ver2">…</span> · installs are fully self-contained.</p>
-
-    <div class="mt-10 grid gap-6 md:grid-cols-2">
-      <!-- Windows -->
-      <div class="card rounded-2xl p-7">
-        <div class="flex items-center gap-3">
-          <svg class="h-8 w-8 text-sky-400" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.45 9.75 2.1v9.45H0zM11 1.9l13-1.9v11.35H11zM0 12.6h9.75v9.45L0 20.7zM11 12.6h13V22l-13-1.9z"/></svg>
-          <h3 class="text-xl font-bold text-white">Windows</h3>
-        </div>
-        <p class="mt-2 text-sm text-zinc-400">Windows 10/11 · 64-bit</p>
-        <div class="mt-5 space-y-2.5">
-          <a data-asset="setup" href="#" class="btn-primary flex items-center justify-between rounded-xl px-5 py-3.5 font-semibold text-white">
-            <span>Setup.exe <span class="ml-1 text-xs font-normal text-purple-200">recommended</span></span><span class="text-xs opacity-80">NSIS installer</span>
-          </a>
-          <a data-asset="msi" href="#" class="btn-ghost flex items-center justify-between rounded-xl px-5 py-3 text-sm font-medium text-zinc-200">
-            <span>MSI package</span><span class="text-xs text-zinc-500">enterprise / silent install</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Linux -->
-      <div class="card rounded-2xl p-7">
-        <div class="flex items-center gap-3">
-          <svg class="h-8 w-8 text-amber-300" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-6h2v6zm4 0h-2V7h2v10z"/></svg>
-          <h3 class="text-xl font-bold text-white">Linux</h3>
-        </div>
-        <p class="mt-2 text-sm text-zinc-400">Ubuntu 22.04+ · Debian 12+ · Fedora · AppImage runs anywhere</p>
-        <div class="mt-5 space-y-2.5">
-          <a data-asset="deb" href="#" class="btn-primary flex items-center justify-between rounded-xl px-5 py-3.5 font-semibold text-white">
-            <span>.deb</span><span class="text-xs opacity-80">Ubuntu / Debian</span>
-          </a>
-          <a data-asset="appimage" href="#" class="btn-ghost flex items-center justify-between rounded-xl px-5 py-3 text-sm font-medium text-zinc-200">
-            <span>AppImage</span><span class="text-xs text-zinc-500">portable — no install</span>
-          </a>
-          <a data-asset="rpm" href="#" class="btn-ghost flex items-center justify-between rounded-xl px-5 py-3 text-sm font-medium text-zinc-200">
-            <span>.rpm</span><span class="text-xs text-zinc-500">Fedora / RHEL</span>
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <p class="mt-6 text-xs text-zinc-500">
-      Installing <span class="text-zinc-400">3.0.0 or earlier</span>? Grab the newest installer once — releases from 0.5.3 onward update themselves automatically.
-      All downloads are served directly from <a class="text-purple-400 hover:underline" href="https://github.com/F0xyN0xy/KitaWatch/releases" target="_blank" rel="noreferrer">GitHub Releases</a> and are minisign-verified by the app.
-    </p>
-  </div>
-</section>
-
-<!-- PRIVACY / LEGAL -->
-<section class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-  <div class="grid gap-8 md:grid-cols-3">
-    <div>
-      <h3 class="font-semibold text-white">No servers of ours</h3>
-      <p class="mt-2 text-sm text-zinc-400">KitaWatch is a client application. It does not host, store, or distribute content; playback sources are resolved from third parties at runtime on your device.</p>
-    </div>
-    <div>
-      <h3 class="font-semibold text-white">Honest license</h3>
-      <p class="mt-2 text-sm text-zinc-400">Free to use and contribute, forever. PolyForm Noncommercial 1.0 — commercial use is not permitted. Source is fully open.</p>
-    </div>
-    <div>
-      <h3 class="font-semibold text-white">Talk to us</h3>
-      <p class="mt-2 text-sm text-zinc-400">Bugs, ideas, provider requests:
-        <a class="text-purple-400 hover:underline" href="https://github.com/F0xyN0xy/KitaWatch/issues" target="_blank" rel="noreferrer">GitHub Issues</a>.</p>
-    </div>
-  </div>
-</section>
-
-<footer class="border-t border-white/5 py-8 text-center text-xs text-zinc-600">
-  KitaWatch · <a class="hover:text-zinc-400" href="https://github.com/F0xyN0xy/KitaWatch" target="_blank" rel="noreferrer">GitHub</a> ·
-  <a class="hover:text-zinc-400" href="https://github.com/F0xyN0xy/KitaWatch/blob/main/LICENSE.md" target="_blank" rel="noreferrer">License</a> ·
-  Not affiliated with any content provider. You are responsible for complying with the laws of your jurisdiction.
-</footer>
-
-<script>
-// If Supabase returns to the site for desktop OAuth, use this same homepage
-// as a lightweight handoff page instead of maintaining a separate callback file.
-const oauthParams = new URLSearchParams(window.location.search);
-const oauthProvider = oauthParams.get('oauth_callback');
-const isOAuthCallback = oauthProvider === 'discord' || oauthProvider === 'anilist';
-if (isOAuthCallback) {
-  const code = oauthParams.get('code');
-  const error = oauthParams.get('error');
-  document.body.innerHTML = `
-    <main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#0a0a0f;color:#e4e4e7;font-family:Inter,system-ui,sans-serif;text-align:center">
-      <section style="width:min(100%,440px);padding:32px;box-sizing:border-box;border:1px solid #ffffff18;border-radius:20px;background:#14141d">
-        <h1 style="font-size:26px;font-weight:800;color:white">Return to KitaWatch</h1>
-        <p id="oauth-message" style="color:#c4c4cc;line-height:1.6">Preparing your sign-in…</p>
-        <p id="oauth-status" role="status" aria-live="polite" style="color:#a1a1aa;font-size:14px"></p>
-        <a id="oauth-open" href="kitawatch://auth?provider=discord" style="display:inline-block;margin-top:16px;padding:12px 20px;border-radius:12px;background:#9333ea;color:white;font-weight:700;text-decoration:none" hidden>Open KitaWatch</a>
-      </section>
-    </main>`;
-  // Remove OAuth query values from the visible address/history as soon as read.
-  window.history.replaceState(null, '', window.location.pathname);
-  const message = document.getElementById('oauth-message');
-  const status = document.getElementById('oauth-status');
-  const openLink = document.getElementById('oauth-open');
-  if (error || !code) {
-    message.textContent = 'Sign-in could not be completed.';
-    status.textContent = 'Return to KitaWatch and try signing in again.';
-  } else {
-    const callback = 'kitawatch://auth?provider=' + encodeURIComponent(oauthProvider) + '&code=' + encodeURIComponent(code);
-    openLink.href = callback;
-    openLink.hidden = false;
-    message.textContent = 'Authorization is complete.';
-    status.textContent = 'Opening KitaWatch… If it does not open, use the button below.';
-    window.location.href = callback;
-  }
-} else {
-// Resolve download links from the latest GitHub release (no hardcoded versions)
-const REPO = 'F0xyN0xy/KitaWatch';
-const MATCHERS = {
-  setup:    /x64-setup\.exe$/i,
-  msi:      /x64_en-US\.msi$/i,
-  deb:      /amd64\.deb$/i,
-  rpm:      /x86_64\.rpm$/i,
-  appimage: /amd64\.AppImage$/i,
-};
-fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
-  .then((r) => r.json())
-  .then((rel) => {
-    document.getElementById('ver').textContent = rel.tag_name.replace(/^v/, '');
-    document.getElementById('ver2').textContent = rel.tag_name;
-    for (const [key, re] of Object.entries(MATCHERS)) {
-      const asset = (rel.assets || []).find((a) => re.test(a.name));
-      document.querySelectorAll(`[data-asset="${key}"]`).forEach((el) => {
-        if (asset) { el.href = asset.browser_download_url; el.target = '_blank'; el.rel = 'noreferrer'; }
-        else el.classList.add('opacity-40', 'pointer-events-none');
-      });
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#17151d">
+  <title>KitaWatch — Anime, on your terms</title>
+  <meta name="description" content="A free, local-first anime client for Windows and Linux. Browse, watch, and keep your anime list in your hands.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="KitaWatch">
+  <meta property="og:title" content="KitaWatch — Anime, on your terms">
+  <meta property="og:description" content="A local-first desktop anime client for Windows and Linux. Free, open source, and self-updating.">
+  <meta property="og:url" content="https://kitawatch.free.nf">
+  <meta property="og:image" content="https://kitawatch.free.nf/banner.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="banner.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #17151d;
+      --surface: #201d27;
+      --surface-raised: #292531;
+      --line: #393442;
+      --text: #f4f0f8;
+      --muted: #b4adbf;
+      --quiet: #827b8e;
+      --accent: #c4a7f5;
+      --accent-strong: #a981e8;
+      --good: #a8d7bd;
+      --max: 1120px;
     }
-    const setup = (rel.assets || []).find((a) => MATCHERS.setup.test(a.name));
-    if (setup) document.getElementById('dl-main').href = setup.browser_download_url;
-  })
-  .catch(() => {
-    document.getElementById('ver').textContent = '?';
-    document.getElementById('ver2').textContent = 'see GitHub Releases';
-  });
-}
-</script>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 88px; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 "DM Sans", system-ui, sans-serif; }
+    a { color: inherit; }
+    a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    ::selection { color: #17151d; background: var(--accent); }
+    .wrap { width: min(var(--max), calc(100% - 40px)); margin-inline: auto; }
+    .topbar { position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--line); background: rgba(23,21,29,.96); }
+    .nav { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 700 20px/1 "Space Grotesk", sans-serif; letter-spacing: -.06em; }
+    .mark { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #6f5c89; border-radius: 10px 10px 10px 3px; color: var(--accent); font-size: 16px; }
+    .navlinks { display: flex; align-items: center; gap: 26px; }
+    .navlinks a { color: var(--muted); font-size: 14px; text-decoration: none; }
+    .navlinks a:hover { color: var(--text); }
+    .navlinks .nav-github { border: 1px solid var(--line); padding: 8px 13px; border-radius: 7px; color: var(--text); }
+    .hero { padding: 78px 0 72px; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); align-items: center; gap: 64px; }
+    .release-line { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 22px; color: var(--good); font-size: 13px; font-weight: 600; }
+    .release-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { font-family: "Space Grotesk", sans-serif; }
+    h1 { max-width: 620px; margin-bottom: 22px; font-size: clamp(42px, 5.3vw, 68px); line-height: 1.03; letter-spacing: -.065em; font-weight: 600; }
+    .hero-copy { max-width: 540px; margin-bottom: 28px; color: var(--muted); font-size: 18px; line-height: 1.7; }
+    .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .button { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 10px; padding: 12px 18px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; font-weight: 700; text-decoration: none; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+    .button:hover { transform: translateY(-1px); }
+    .button-primary { background: var(--accent); color: #20172c; }
+    .button-primary:hover { background: #d5c2fa; }
+    .button-secondary { border-color: var(--line); color: var(--text); }
+    .button-secondary:hover { background: var(--surface); border-color: #665b75; }
+    .hero-note { margin: 18px 0 0; color: var(--quiet); font-size: 12px; }
+    .preview { position: relative; padding: 12px; border: 1px solid #4b4356; border-radius: 15px; background: #211e28; box-shadow: 16px 18px 0 #100f14; }
+    .preview-bar { display: flex; align-items: center; gap: 6px; padding: 5px 4px 13px; color: var(--quiet); font-size: 11px; }
+    .preview-bar span { width: 6px; height: 6px; border-radius: 50%; background: #6f667b; }
+    .preview-bar strong { margin-left: auto; margin-right: auto; font-weight: 500; }
+    .preview img { display: block; width: 100%; height: auto; border: 1px solid #403849; border-radius: 8px; }
+    .preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 3px 1px; color: var(--muted); font-size: 12px; }
+    .preview-caption b { color: var(--text); font-weight: 600; }
+    .section { padding: 68px 0; border-top: 1px solid var(--line); }
+    .section-heading { display: grid; grid-template-columns: 1fr minmax(250px, .75fr); align-items: end; gap: 36px; margin-bottom: 32px; }
+    h2 { max-width: 600px; margin-bottom: 0; font-size: clamp(30px, 3.4vw, 42px); line-height: 1.13; letter-spacing: -.05em; font-weight: 600; }
+    .section-heading p { margin-bottom: 2px; color: var(--muted); font-size: 15px; }
+    .feature-list { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .feature { min-height: 190px; padding: 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .feature-index { display: block; margin-bottom: 24px; color: var(--accent); font: 600 12px "Space Grotesk", sans-serif; }
+    .feature h3 { margin-bottom: 9px; font-size: 18px; letter-spacing: -.025em; }
+    .feature p { max-width: 300px; margin-bottom: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .download-section { padding: 72px 0 78px; background: #1d1a23; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .download-head { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 30px; }
+    .download-head p { max-width: 420px; margin: 0; color: var(--muted); font-size: 14px; }
+    .download-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+    .download-panel { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); }
+    .detected { display: flex; align-items: center; gap: 12px; padding: 19px 22px; border-bottom: 1px solid var(--line); }
+    .os-icon { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border: 1px solid #55496a; border-radius: 9px; color: var(--accent); font: 700 16px "Space Grotesk", sans-serif; }
+    .detected-text { flex: 1; min-width: 0; }
+    .detected-text strong { display: block; font-size: 15px; }
+    .detected-text span { display: block; color: var(--muted); font-size: 12px; }
+    .detected-badge { align-self: start; padding: 4px 8px; border-radius: 5px; background: #2c2933; color: var(--good); font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .asset-list { padding: 8px 12px 12px; }
+    .asset-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 10px; border-bottom: 1px solid #302b38; }
+    .asset-row:last-child { border-bottom: 0; }
+    .asset-name { font-size: 14px; font-weight: 700; }
+    .asset-detail { display: block; margin-top: 2px; color: var(--quiet); font-size: 12px; font-weight: 400; }
+    .asset-link { display: inline-flex; align-items: center; justify-content: center; min-width: 94px; padding: 8px 12px; border: 1px solid #66547f; border-radius: 6px; color: var(--accent); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+    .asset-link:hover { background: #30283a; }
+    .asset-link[aria-disabled="true"] { border-color: var(--line); color: var(--quiet); pointer-events: none; }
+    .download-aside { padding: 21px; border: 1px solid var(--line); border-radius: 11px; background: #25212d; }
+    .download-aside h3 { margin-bottom: 10px; font-size: 17px; }
+    .download-aside p { margin-bottom: 16px; color: var(--muted); font-size: 13px; }
+    .download-aside a { color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
+    .download-aside a:hover { text-decoration: underline; }
+    .phone-note { margin-top: 16px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; border: 1px dashed #5a5067; border-radius: 9px; }
+    .phone-note .phone-mark { color: var(--accent); font-size: 19px; line-height: 1.4; }
+    .phone-note strong { display: block; margin-bottom: 3px; font-size: 13px; }
+    .phone-note p { margin: 0; color: var(--muted); font-size: 12px; }
+    .status { min-height: 20px; margin: 12px 0 0; color: var(--quiet); font-size: 12px; }
+    .trust-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; padding: 36px 0 44px; }
+    .trust-row h3 { margin-bottom: 7px; font-size: 15px; }
+    .trust-row p { max-width: 310px; margin-bottom: 0; color: var(--muted); font-size: 13px; }
+    footer { padding: 20px 0 28px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 12px; }
+    .footer-inner { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 800px) {
+      .hero { padding-top: 52px; }
+      .hero-grid { grid-template-columns: 1fr; gap: 36px; }
+      .preview { max-width: 620px; }
+      .section-heading { grid-template-columns: 1fr; gap: 14px; }
+      .feature-list { grid-template-columns: 1fr 1fr; }
+      .download-layout { grid-template-columns: 1fr; }
+      .download-aside { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 20px; }
+      .download-aside h3, .download-aside p { grid-column: 1; }
+      .download-aside p { margin-bottom: 0; }
+      .download-aside a { grid-column: 2; grid-row: 1 / span 2; }
+    }
+    @media (max-width: 560px) {
+      .wrap { width: min(var(--max), calc(100% - 28px)); }
+      .nav { min-height: 64px; }
+      .navlinks { gap: 14px; }
+      .navlinks a { font-size: 12px; }
+      .navlinks a:nth-child(1), .navlinks a:nth-child(2) { display: none; }
+      .hero { padding: 42px 0 48px; }
+      h1 { font-size: clamp(40px, 12vw, 54px); }
+      .hero-copy { font-size: 16px; }
+      .button { width: 100%; }
+      .section, .download-section { padding: 48px 0; }
+      .feature-list { grid-template-columns: 1fr; }
+      .feature { min-height: auto; padding: 20px; }
+      .feature-index { margin-bottom: 12px; }
+      .download-head { align-items: start; flex-direction: column; }
+      .detected { padding: 15px; }
+      .detected-badge { display: none; }
+      .asset-row { padding-inline: 2px; }
+      .trust-row { grid-template-columns: 1fr; gap: 22px; }
+      .download-aside { display: block; }
+      .download-aside a { display: inline-block; margin-top: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="site-content">
+    <div class="topbar">
+      <nav class="nav wrap" aria-label="Main navigation">
+        <a class="wordmark" href="#" aria-label="KitaWatch home"><span class="mark" aria-hidden="true">K</span><span>KitaWatch</span></a>
+        <div class="navlinks">
+          <a href="#features">What it does</a>
+          <a href="#download">Downloads</a>
+          <a class="nav-github" href="https://github.com/F0xyN0xy/KitaWatch" target="_blank" rel="noreferrer">View source</a>
+        </div>
+      </nav>
+    </div>
+
+    <main>
+      <header class="hero">
+        <div class="hero-grid wrap">
+          <div>
+            <p class="release-line"><span class="release-dot"></span><span>Desktop release <span id="ver">checking…</span></span></p>
+            <h1>Your anime list.<br>Your machine.<br>Your call.</h1>
+            <p class="hero-copy">KitaWatch is a desktop anime client built to keep the experience close to home: your library and history stay on your device, with optional AniList sync and a player that can switch sources when one fails.</p>
+            <div class="hero-actions">
+              <a id="dl-main" class="button button-primary" href="#download">Find your download</a>
+              <a class="button button-secondary" href="https://github.com/F0xyN0xy/KitaWatch" target="_blank" rel="noreferrer">Explore the code</a>
+            </div>
+            <p class="hero-note">Free to use · Open source · Windows and Linux desktop builds</p>
+          </div>
+          <div class="preview" aria-label="KitaWatch app preview">
+            <div class="preview-bar"><span></span><span></span><span></span><strong>KitaWatch / Library</strong></div>
+            <img src="banner.png" alt="KitaWatch desktop artwork" width="2048" height="1024">
+            <div class="preview-caption"><b>Made for desktop</b><span>Local-first by design</span></div>
+          </div>
+        </div>
+      </header>
+
+      <section class="section" id="features">
+        <div class="wrap">
+          <div class="section-heading">
+            <h2>Less platform. More personal library.</h2>
+            <p>The useful parts of a watch client, without needing an account just to get started.</p>
+          </div>
+          <div class="feature-list">
+            <article class="feature">
+              <span class="feature-index">A</span>
+              <h3>One player, multiple sources</h3>
+              <p>Switch sources and let playback try another provider when a stream fails.</p>
+            </article>
+            <article class="feature">
+              <span class="feature-index">B</span>
+              <h3>Keep track your way</h3>
+              <p>Manage watch status locally and optionally sync your list with AniList.</p>
+            </article>
+            <article class="feature">
+              <span class="feature-index">C</span>
+              <h3>Subtitles you can tune</h3>
+              <p>Styled subtitles, playback shortcuts, skip-intro support, and picture-in-picture.</p>
+            </article>
+            <article class="feature">
+              <span class="feature-index">D</span>
+              <h3>Local-first by default</h3>
+              <p>The app's backend services run on your own machine. KitaWatch does not operate a central streaming server.</p>
+            </article>
+            <article class="feature">
+              <span class="feature-index">E</span>
+              <h3>Updates without the hunt</h3>
+              <p>Install a supported release and use the built-in updater to stay current.</p>
+            </article>
+            <article class="feature">
+              <span class="feature-index">F</span>
+              <h3>Know what is responding</h3>
+              <p>Provider status and troubleshooting tools help narrow down playback problems.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="download-section" id="download">
+        <div class="wrap">
+          <div class="download-head">
+            <div>
+              <h2>Get KitaWatch</h2>
+              <p id="release-line">Choose a build for your computer. The recommended option is selected from your browser's operating-system hint.</p>
+            </div>
+          </div>
+          <div class="download-layout">
+            <div class="download-panel">
+              <div class="detected">
+                <div class="os-icon" id="os-icon" aria-hidden="true">?</div>
+                <div class="detected-text">
+                  <strong id="os-title">Detecting your device…</strong>
+                  <span id="os-detail">Checking which desktop build fits best</span>
+                </div>
+                <span class="detected-badge" id="os-badge">Recommended</span>
+              </div>
+              <div class="asset-list" id="asset-list">
+                <div class="asset-row"><div><span class="asset-name">Loading release assets…</span><span class="asset-detail">Connecting to GitHub Releases</span></div></div>
+              </div>
+            </div>
+            <aside class="download-aside">
+              <h3>Using a phone or tablet?</h3>
+              <p>A native mobile version is on the roadmap, but it is not available to download yet. KitaWatch currently ships desktop builds only.</p>
+              <a href="https://github.com/F0xyN0xy/KitaWatch/issues/51" target="_blank" rel="noreferrer">Follow mobile progress</a>
+            </aside>
+          </div>
+          <p class="status" id="download-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="wrap trust-row" aria-label="Project information">
+        <div>
+          <h3>No central streaming server</h3>
+          <p>KitaWatch is a client. Playback sources are provided by third parties and resolved at runtime on your device.</p>
+        </div>
+        <div>
+          <h3>Open source, non-commercial</h3>
+          <p>The project is available to inspect and contribute to under the PolyForm Noncommercial 1.0 license.</p>
+        </div>
+        <div>
+          <h3>Need help?</h3>
+          <p>Report a bug, ask a question, or suggest an improvement through <a href="https://github.com/F0xyN0xy/KitaWatch/issues" target="_blank" rel="noreferrer">GitHub Issues</a>.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap footer-inner">
+        <span>KitaWatch · Not affiliated with any content provider.</span>
+        <span><a href="https://github.com/F0xyN0xy/KitaWatch" target="_blank" rel="noreferrer">GitHub</a> &nbsp;·&nbsp; <a href="https://github.com/F0xyN0xy/KitaWatch/blob/main/LICENSE.md" target="_blank" rel="noreferrer">License</a> &nbsp;·&nbsp; You are responsible for following the laws that apply where you live.</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // OAuth return handoff: keep this page compatible with the desktop sign-in flow.
+    const oauthParams = new URLSearchParams(window.location.search);
+    const oauthProvider = oauthParams.get('oauth_callback');
+    if (oauthProvider === 'discord' || oauthProvider === 'anilist') {
+      const code = oauthParams.get('code');
+      const error = oauthParams.get('error');
+      document.body.innerHTML = '<main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#17151d;color:#f4f0f8;font-family:system-ui,sans-serif;text-align:center"><section style="width:min(100%,440px);padding:32px;border:1px solid #393442;border-radius:12px;background:#201d27"><h1>Return to KitaWatch</h1><p id="oauth-message">Preparing your sign-in…</p><p id="oauth-status" role="status" aria-live="polite"></p><a id="oauth-open" href="#" style="display:inline-block;margin-top:16px;padding:12px 20px;border-radius:8px;background:#c4a7f5;color:#20172c;font-weight:700;text-decoration:none" hidden>Open KitaWatch</a></section></main>';
+      window.history.replaceState(null, '', window.location.pathname);
+      const message = document.getElementById('oauth-message');
+      const status = document.getElementById('oauth-status');
+      const openLink = document.getElementById('oauth-open');
+      if (error || !code) {
+        message.textContent = 'Sign-in could not be completed.';
+        status.textContent = 'Return to KitaWatch and try signing in again.';
+      } else {
+        const callback = 'kitawatch://auth?provider=' + encodeURIComponent(oauthProvider) + '&code=' + encodeURIComponent(code);
+        openLink.href = callback;
+        openLink.hidden = false;
+        message.textContent = 'Authorization is complete.';
+        status.textContent = 'Opening KitaWatch… If it does not open, use the button below.';
+        window.location.href = callback;
+      }
+    } else {
+      const REPO = 'F0xyN0xy/KitaWatch';
+      const MATCHERS = {
+        setup: /x64-setup\.exe$/i,
+        msi: /x64_en-US\.msi$/i,
+        deb: /amd64\.deb$/i,
+        rpm: /x86_64\.rpm$/i,
+        appimage: /amd64\.AppImage$/i
+      };
+      const ua = navigator.userAgent || '';
+      const platform = navigator.userAgentData?.platform || navigator.platform || ua;
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+      const isWindows = /Windows/i.test(platform + ' ' + ua);
+      const isLinux = /Linux|Ubuntu|Fedora|Debian/i.test(platform + ' ' + ua) && !isMobile;
+      const isMac = /Mac|macOS/i.test(platform + ' ' + ua) && !isMobile;
+      const ui = {
+        title: document.getElementById('os-title'),
+        detail: document.getElementById('os-detail'),
+        icon: document.getElementById('os-icon'),
+        badge: document.getElementById('os-badge'),
+        list: document.getElementById('asset-list'),
+        main: document.getElementById('dl-main'),
+        status: document.getElementById('download-status'),
+        version: document.getElementById('ver'),
+        release: document.getElementById('release-line')
+      };
+
+      function row(name, detail, asset, recommended) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'asset-row';
+        const description = document.createElement('div');
+        const title = document.createElement('span');
+        title.className = 'asset-name';
+        title.textContent = name + (recommended ? ' · Recommended' : '');
+        const sub = document.createElement('span');
+        sub.className = 'asset-detail';
+        sub.textContent = detail;
+        description.append(title, sub);
+        const link = document.createElement('a');
+        link.className = 'asset-link';
+        link.textContent = asset ? 'Download' : 'Unavailable';
+        link.href = asset ? asset.browser_download_url : '#';
+        if (!asset) {
+          link.setAttribute('aria-disabled', 'true');
+          link.setAttribute('tabindex', '-1');
+        } else {
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.setAttribute('aria-label', 'Download ' + name);
+        }
+        wrapper.append(description, link);
+        return wrapper;
+      }
+
+      function setDeviceState() {
+        if (isMobile) {
+          ui.icon.textContent = 'M';
+          ui.title.textContent = 'Mobile version planned';
+          ui.detail.textContent = 'There is no Android or iOS installer yet.';
+          ui.badge.textContent = 'Coming later';
+          ui.main.textContent = 'View desktop downloads';
+          ui.main.href = '#download';
+        } else if (isWindows) {
+          ui.icon.textContent = 'W';
+          ui.title.textContent = 'Windows detected';
+          ui.detail.textContent = 'Windows 10/11 · 64-bit installer';
+          ui.badge.textContent = 'Best match';
+          ui.main.textContent = 'Download for Windows';
+        } else if (isLinux) {
+          ui.icon.textContent = 'L';
+          ui.title.textContent = 'Linux detected';
+          ui.detail.textContent = 'Choose a package for your distribution';
+          ui.badge.textContent = 'Best match';
+          ui.main.textContent = 'Download for Linux';
+          ui.main.href = '#download';
+        } else if (isMac) {
+          ui.icon.textContent = 'M';
+          ui.title.textContent = 'macOS detected';
+          ui.detail.textContent = 'A macOS build is not available yet.';
+          ui.badge.textContent = 'Not available';
+          ui.main.textContent = 'View release options';
+          ui.main.href = 'https://github.com/' + REPO + '/releases/latest';
+        } else {
+          ui.icon.textContent = '?';
+          ui.title.textContent = 'Choose your desktop build';
+          ui.detail.textContent = 'Your operating system could not be identified.';
+          ui.badge.textContent = 'Choose below';
+          ui.main.textContent = 'Browse downloads';
+          ui.main.href = '#download';
+        }
+      }
+
+      function renderAssets(assets) {
+        ui.list.replaceChildren();
+        const get = key => assets.find(asset => MATCHERS[key].test(asset.name));
+        if (isWindows) {
+          ui.list.append(
+            row('Windows installer (.exe)', 'Recommended for most Windows users', get('setup'), true),
+            row('Windows package (.msi)', 'For managed or silent installs', get('msi'), false)
+          );
+        } else if (isLinux) {
+          ui.list.append(
+            row('AppImage', 'Portable package for many distributions', get('appimage'), true),
+            row('Debian package (.deb)', 'Ubuntu and Debian-based systems', get('deb'), false),
+            row('RPM package (.rpm)', 'Fedora and RPM-based systems', get('rpm'), false)
+          );
+        } else if (isMobile) {
+          const empty = document.createElement('div');
+          empty.className = 'asset-row';
+          const info = document.createElement('div');
+          const title = document.createElement('span');
+          title.className = 'asset-name';
+          title.textContent = 'Mobile app — not released';
+          const detail = document.createElement('span');
+          detail.className = 'asset-detail';
+          detail.textContent = 'Follow the roadmap for updates; do not download a desktop installer on a phone.';
+          info.append(title, detail);
+          empty.append(info);
+          ui.list.append(empty);
+        } else if (isMac) {
+          const empty = document.createElement('div');
+          empty.className = 'asset-row';
+          const info = document.createElement('div');
+          const title = document.createElement('span');
+          title.className = 'asset-name';
+          title.textContent = 'No macOS package in this release';
+          const detail = document.createElement('span');
+          detail.className = 'asset-detail';
+          detail.textContent = 'KitaWatch currently publishes Windows and Linux desktop builds.';
+          info.append(title, detail);
+          empty.append(info);
+          ui.list.append(empty);
+        } else {
+          ui.list.append(
+            row('Windows installer (.exe)', 'Windows 10/11 · 64-bit', get('setup'), false),
+            row('AppImage', 'Linux · portable package', get('appimage'), false),
+            row('Debian package (.deb)', 'Ubuntu / Debian', get('deb'), false),
+            row('RPM package (.rpm)', 'Fedora / RPM-based Linux', get('rpm'), false)
+          );
+        }
+        if (!assets.length) ui.status.textContent = 'Release assets could not be found. You can still open the GitHub release page.';
+      }
+
+      setDeviceState();
+      fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+        .then(response => {
+          if (!response.ok) throw new Error('GitHub Releases returned ' + response.status);
+          return response.json();
+        })
+        .then(release => {
+          const assets = Array.isArray(release.assets) ? release.assets : [];
+          const version = String(release.tag_name || '').replace(/^v/, '') || 'latest';
+          ui.version.textContent = version;
+          ui.release.textContent = 'Latest release ' + (release.tag_name || version) + '. Downloads come directly from GitHub Releases.';
+          const setup = assets.find(asset => MATCHERS.setup.test(asset.name));
+          const appimage = assets.find(asset => MATCHERS.appimage.test(asset.name));
+          if (isWindows && setup) {
+            ui.main.href = setup.browser_download_url;
+            ui.main.target = '_blank';
+            ui.main.rel = 'noreferrer';
+          } else if (isLinux && appimage) {
+            ui.main.href = appimage.browser_download_url;
+            ui.main.target = '_blank';
+            ui.main.rel = 'noreferrer';
+          } else if (isMac || isMobile) {
+            ui.main.href = 'https://github.com/' + REPO + '/releases/latest';
+            ui.main.target = '_blank';
+            ui.main.rel = 'noreferrer';
+          } else {
+            ui.main.href = '#download';
+          }
+          renderAssets(assets);
+        })
+        .catch(error => {
+          ui.version.textContent = 'see releases';
+          ui.release.textContent = 'Could not check the latest release automatically. Open GitHub Releases to choose a build.';
+          ui.main.href = 'https://github.com/' + REPO + '/releases/latest';
+          ui.main.target = '_blank';
+          ui.main.rel = 'noreferrer';
+          ui.status.textContent = 'Release lookup failed. Downloads may still be available on GitHub.';
+          ui.list.replaceChildren();
+          const fallback = document.createElement('div');
+          fallback.className = 'asset-row';
+          const text = document.createElement('div');
+          const title = document.createElement('span');
+          title.className = 'asset-name';
+          title.textContent = 'Browse all releases';
+          const detail = document.createElement('span');
+          detail.className = 'asset-detail';
+          detail.textContent = 'Select the installer for your operating system on GitHub.';
+          text.append(title, detail);
+          const link = document.createElement('a');
+          link.className = 'asset-link';
+          link.href = 'https://github.com/' + REPO + '/releases/latest';
+          link.target = '_blank';
+          link.rel = 'noreferrer';
+          link.textContent = 'Open';
+          fallback.append(text, link);
+          ui.list.append(fallback);
+        });
+    }
+  </script>
 </body>
 </html>
