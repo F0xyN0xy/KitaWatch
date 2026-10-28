@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
+import 'artplayer/dist/artplayer.css';
 import { invoke } from '@tauri-apps/api/core';
 import { Download } from 'lucide-react';
 import Hls from 'hls.js';
