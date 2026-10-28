@@ -34,11 +34,11 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl bg-ink-900 p-5 ring-1 ring-white/5">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-zinc-500">
+    <section className="rounded-xl bg-ink-900 p-4 ring-1 ring-white/5">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
         {title}
       </h2>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </section>
   );
 }
@@ -140,7 +140,7 @@ export default function Settings() {
   };
 
   return (
-    <PageContainer className="max-w-3xl">
+    <PageContainer className="!max-w-5xl !space-y-5 !p-4 md:!p-6">
       <h1 className="text-2xl font-bold text-white">Settings</h1>
       {note && (
         <p className="rounded-lg bg-ink-900 px-4 py-2 text-sm text-accent-300 ring-1 ring-accent-500/30">
