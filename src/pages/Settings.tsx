@@ -5,7 +5,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import UpdatesPanel from '@/components/UpdatesPanel';
 import Disclaimer from '@/components/ui/Disclaimer';
-import { useSettingsStore, type Quality } from '@/stores/settingsStore';
+import { useSettingsStore, type Quality, type ThemeAccent, type ThemeStyle } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAnimeStore } from '@/stores/animeStore';
 import { anilist, startAniListOAuth } from '@/services/anilist';
@@ -48,6 +48,8 @@ export default function Settings() {
   const {
     themeAccent,
     setThemeAccent,
+    themeStyle,
+    setThemeStyle,
     defaultQuality,
     autoplayNext,
     subtitleEnabled,
@@ -141,7 +143,8 @@ export default function Settings() {
   };
 
   return (
-    <PageContainer className="!max-w-5xl !space-y-5 !p-4 md:!p-6">
+    <PageContainer className="!space-y-5 !p-4 md:!p-6">
+      <div className="mx-auto w-full max-w-5xl space-y-5">
       <h1 className="text-2xl font-bold text-white">Settings</h1>
       {note && (
         <p className="rounded-lg bg-ink-900 px-4 py-2 text-sm text-accent-300 ring-1 ring-accent-500/30">
@@ -259,25 +262,52 @@ export default function Settings() {
       </Section>
 
       <Section title="Appearance">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-zinc-300">Accent color</p>
-            <p className="text-xs text-zinc-600">
-              Customize buttons, highlights, focus rings, and other accent details.
-            </p>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_250px] lg:items-start">
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Accent palette</p>
+              <p className="mt-1 text-xs text-zinc-500">Buttons, active navigation, focus rings and selected controls.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {([{ value: 'violet', label: 'Violet', color: '#a855f7' }, { value: 'blue', label: 'Ocean blue', color: '#3b82f6' }, { value: 'emerald', label: 'Emerald', color: '#10b981' }, { value: 'rose', label: 'Rose', color: '#f43f5e' }, { value: 'amber', label: 'Amber', color: '#f59e0b' }] as const).map((palette) => (
+                  <button key={palette.value} type="button" onClick={() => setThemeAccent(palette.value as ThemeAccent)} aria-pressed={themeAccent === palette.value} className={themeAccent === palette.value ? "flex items-center gap-2.5 rounded-lg border border-accent-400 bg-ink-800 px-3 py-2.5 text-left text-xs text-white" : "flex items-center gap-2.5 rounded-lg border border-white/10 bg-ink-950/50 px-3 py-2.5 text-left text-xs text-zinc-400 hover:border-white/20 hover:text-zinc-200"}>
+                    <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: palette.color }} />
+                    <span>{palette.label}</span>
+                    {themeAccent === palette.value && <span className="ml-auto text-accent-300">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Surface style</p>
+              <p className="mt-1 text-xs text-zinc-500">Choose the mood of the app background and panels.</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {([{ value: 'plum', label: 'Plum', detail: 'Warm charcoal', swatches: ['#17151d', '#201d27', '#c4a7f5'] }, { value: 'midnight', label: 'Midnight', detail: 'Cool blue-black', swatches: ['#10131b', '#171c27', '#93c5fd'] }, { value: 'graphite', label: 'Graphite', detail: 'Neutral charcoal', swatches: ['#171717', '#202020', '#d4d4d4'] }] as const).map((style) => (
+                  <button key={style.value} type="button" onClick={() => setThemeStyle(style.value as ThemeStyle)} aria-pressed={themeStyle === style.value} className={themeStyle === style.value ? "rounded-lg border border-accent-400 bg-ink-800 p-2.5 text-left" : "rounded-lg border border-white/10 bg-ink-950/40 p-2.5 text-left hover:border-white/20"}>
+                    <span className="mb-2 flex h-8 overflow-hidden rounded-md border border-white/10">
+                      {style.swatches.map((color) => <span key={color} className="flex-1" style={{ backgroundColor: color }} />)}
+                    </span>
+                    <span className="block text-xs font-semibold text-zinc-200">{style.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-zinc-500">{style.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <select
-            aria-label="Theme accent color"
-            value={themeAccent}
-            onChange={(e) => setThemeAccent(e.target.value as typeof themeAccent)}
-            className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent-500/60"
-          >
-            <option value="violet">Violet (default)</option>
-            <option value="blue">Ocean blue</option>
-            <option value="emerald">Emerald</option>
-            <option value="rose">Rose</option>
-            <option value="amber">Amber</option>
-          </select>
+          <div className="rounded-xl border border-white/10 bg-ink-950 p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Live preview</span>
+              <span className="h-2 w-2 rounded-full bg-accent-400" />
+            </div>
+            <div className="rounded-lg border border-white/10 bg-ink-900 p-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-600 text-[11px] font-bold text-white">K</span>
+                <div className="min-w-0"><p className="text-xs font-semibold text-zinc-100">KitaWatch</p><p className="text-[10px] text-zinc-500">Your library, your style</p></div>
+              </div>
+              <div className="mt-4 space-y-2"><div className="h-2 w-3/4 rounded bg-ink-700" /><div className="h-2 w-1/2 rounded bg-ink-800" /></div>
+              <div className="mt-4 flex items-center justify-between gap-2"><span className="rounded-md bg-accent-600 px-2.5 py-1.5 text-[10px] font-semibold text-white">Selected</span><span className="rounded-md border border-white/10 px-2.5 py-1.5 text-[10px] text-zinc-400">Secondary</span></div>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">Changes apply immediately and are saved on this device.</p>
+          </div>
         </div>
       </Section>
 
@@ -457,6 +487,7 @@ export default function Settings() {
         <Disclaimer />
       </Section>
       <UpdatesPanel />
+      </div>
     </PageContainer>
   );
 }
