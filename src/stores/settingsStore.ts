@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export type Quality = 'auto' | '1080p' | '720p' | '480p';
 export type ThemeAccent = 'violet' | 'blue' | 'emerald' | 'rose' | 'amber';
+export type ThemeStyle = 'plum' | 'midnight' | 'graphite';
 
 /** Provider order for the source list (prefix match on the "server" tag). */
 export const PROVIDER_PRIORITY = [
@@ -56,6 +57,7 @@ function sidecarDefault(env: unknown, fallback: string): string {
 
 interface SettingsState {
   themeAccent: ThemeAccent;
+  themeStyle: ThemeStyle;
   defaultQuality: Quality;
   autoplayNext: boolean;
   /** Show subtitles by default in direct-media playback. */
@@ -110,6 +112,7 @@ interface SettingsState {
    */
   discordAppId: string;
   setThemeAccent: (accent: ThemeAccent) => void;
+  setThemeStyle: (style: ThemeStyle) => void;
   setDefaultQuality: (q: Quality) => void;
   setAutoplayNext: (v: boolean) => void;
   setSubtitleEnabled: (v: boolean) => void;
@@ -139,6 +142,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       themeAccent: 'violet',
+      themeStyle: 'plum',
       defaultQuality: 'auto',
       autoplayNext: true,
       subtitleEnabled: true,
@@ -174,6 +178,7 @@ export const useSettingsStore = create<SettingsState>()(
       discordRichPresence: true,
       discordAppId: '1553307716758536202',
       setThemeAccent: (themeAccent) => set({ themeAccent }),
+      setThemeStyle: (themeStyle) => set({ themeStyle }),
       setDefaultQuality: (defaultQuality) => set({ defaultQuality }),
       setAutoplayNext: (autoplayNext) => set({ autoplayNext }),
       setSubtitleEnabled: (subtitleEnabled) => set({ subtitleEnabled }),
@@ -203,7 +208,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 12,
+      version: 13,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -258,6 +263,9 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (version < 12) {
           s.themeAccent = s.themeAccent ?? 'violet';
+        }
+        if (version < 13) {
+          s.themeStyle = s.themeStyle ?? 'plum';
         }
         return s as SettingsState;
       },

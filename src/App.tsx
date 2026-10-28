@@ -91,10 +91,12 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const themeAccent = useSettingsStore((state) => state.themeAccent);
+  const themeStyle = useSettingsStore((state) => state.themeStyle);
 
   useEffect(() => {
     document.documentElement.dataset.themeAccent = themeAccent;
-  }, [themeAccent]);
+    document.documentElement.dataset.themeStyle = themeStyle;
+  }, [themeAccent, themeStyle]);
   const watchMatch = location.pathname.match(/^\/watch\/([^/]+)\/([^/]+)\/?$/);
   const currentWatchRoute = watchMatch ? { id: watchMatch[1], episode: watchMatch[2] } : null;
   const [lastWatchRoute, setLastWatchRoute] = useState<{ id: string; episode: string } | null>(null);

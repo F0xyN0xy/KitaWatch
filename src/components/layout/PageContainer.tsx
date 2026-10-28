@@ -21,7 +21,7 @@ const PageContainer = forwardRef<HTMLElement, Props>(function PageContainer(
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`flex-1 space-y-8 overflow-y-auto p-6 ${className}`}
+      className={`relative min-h-0 min-w-0 flex-1 space-y-8 overflow-y-auto p-6 ${className}`}
     >
       {children}
     </motion.main>
