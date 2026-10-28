@@ -16,7 +16,13 @@ if (!existsSync(path.join(apiDir, 'api.py'))) {
   process.exit(1);
 }
 
-const python = process.env.KITAWATCH_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+const venvPython = path.join(apiDir, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3');
+const python = existsSync(venvPython)
+  ? venvPython
+  : process.env.KITAWATCH_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+if (!existsSync(venvPython)) {
+  console.warn('[api] Isolated Python environment not found; run `npm run setup:api` to avoid global package conflicts.');
+}
 console.log('[api] Starting Kuhi API on http://127.0.0.1:8000 ...');
 
 const child = spawn(

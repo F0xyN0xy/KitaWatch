@@ -26,3 +26,5 @@ build
 _kitawatch_entry.py
 proxy.*
 .prettierrc.json
+
+.venv/

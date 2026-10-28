@@ -141,7 +141,21 @@ mod imp {
     use std::process::Command;
 
     fn spawn_uvicorn(dir: &PathBuf, app: &str, port: u16, logs: &Path) -> Option<Child> {
-        let mut cmd = Command::new(python());
+        let venv_python = dir.join(".venv").join(if cfg!(windows) {
+            "Scripts/python.exe"
+        } else {
+            "bin/python3"
+        });
+        let interpreter = if venv_python.exists() {
+            venv_python.to_string_lossy().into_owned()
+        } else {
+            note(format!(
+                "Python environment missing for {app} at {}; run `npm run setup:api` to create isolated environments",
+                venv_python.display()
+            ));
+            python()
+        };
+        let mut cmd = Command::new(interpreter);
         cmd.args(["-m", "uvicorn", app, "--host", "127.0.0.1", "--port", &port.to_string()])
             .env("KITAWATCH_LOG_DIR", logs)
             .current_dir(dir);
