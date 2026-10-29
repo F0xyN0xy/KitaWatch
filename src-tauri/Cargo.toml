@@ -10,21 +10,21 @@ name = "kitawatch_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.7.3", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
-tauri = { version = "2.12.4", features = ["devtools"] }
+tauri = { version = "2.12.5", features = ["devtools"] }
 tauri-plugin-opener = "2.7.2"
 tauri-plugin-deep-link = "=2.6.1"
-tauri-plugin-shell = "2.5.0"
-tauri-plugin-updater = "2.14.0"
-tauri-plugin-window-state = "2"
-serde = { version = "1", features = ["derive"] }
+tauri-plugin-shell = "2.6.0"
+tauri-plugin-updater = "2.14.1"
+tauri-plugin-window-state = "2.5.0"
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-dotenvy = "0.15"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream"] }
-futures-util = "0.3"
-discord-rich-presence = "0.2"
+dotenvy = "0.15.7"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "stream"] }
+futures-util = "0.3.34"
+discord-rich-presence = "1.1.0"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = { version = "=2.5.3", features = ["deep-link"] }
@@ -44,4 +44,4 @@ windows-sys = { version = "0.61.2", features = [
 
 # Linux: PR_SET_PDEATHSIG so sidecars get SIGKILL when the parent dies.
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc = "0.2.191"
