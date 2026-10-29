@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Clipboard, ExternalLink, LoaderCircle, Newspaper, X } from 'lucide-react';
+import ReleaseMarkdown from '@/components/ReleaseMarkdown';
 
 type Release = {
   tag_name: string;
@@ -151,7 +152,7 @@ export default function WhatsNewDialog({ open, appVersion, onClose }: Props) {
                     View on GitHub <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 </div>
-                <div className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">{selected.body?.trim() || 'No release notes were added for this version.'}</div>
+                <ReleaseMarkdown source={selected.body?.trim() || 'No release notes were added for this version.'} />
               </>
             ) : (
               <div className="flex h-full min-h-32 flex-col items-start justify-center gap-3">
