@@ -81,6 +81,7 @@ for (const e of entries) {
       '--onefile', '--noconsole', '--noconfirm', '--clean',
       '--name', e.name,
       '--collect-submodules', 'api',
+      '--collect-submodules', 'src.providers',
       '--collect-all', 'uvicorn',
       '--collect-all', 'fastapi',
       '--collect-all', 'httpx',
