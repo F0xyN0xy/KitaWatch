@@ -24,20 +24,14 @@ pub fn init(app_id: &str) {
     }
 
     log(&format!("init: connecting with app_id={}", app_id));
-    match DiscordIpcClient::new(app_id) {
-        Ok(mut client) => {
-            match client.connect() {
-                Ok(_) => {
-                    log("init: connected successfully");
-                    *guard = Some(client);
-                }
-                Err(e) => {
-                    log(&format!("init: connect FAILED - {}", e));
-                }
-            }
+    let mut client = DiscordIpcClient::new(app_id);
+    match client.connect() {
+        Ok(_) => {
+            log("init: connected successfully");
+            *guard = Some(client);
         }
         Err(e) => {
-            log(&format!("init: client creation FAILED - {}", e));
+            log(&format!("init: connect FAILED - {}", e));
         }
     }
 }
@@ -54,21 +48,14 @@ pub fn set(details: &str, state: Option<&str>, start: Option<i64>) {
     // Initialize if needed (Discord might not have been running at startup)
     if guard.is_none() {
         log("set: not initialized, attempting lazy init");
-        match DiscordIpcClient::new("1553307716758536202") {
-            Ok(mut client) => {
-                match client.connect() {
-                    Ok(_) => {
-                        log("set: lazy init connected");
-                        *guard = Some(client);
-                    }
-                    Err(e) => {
-                        log(&format!("set: lazy init connect FAILED - {}", e));
-                        return;
-                    }
-                }
+        let mut client = DiscordIpcClient::new("1553307716758536202");
+        match client.connect() {
+            Ok(_) => {
+                log("set: lazy init connected");
+                *guard = Some(client);
             }
             Err(e) => {
-                log(&format!("set: lazy init client creation FAILED - {}", e));
+                log(&format!("set: lazy init connect FAILED - {}", e));
                 return;
             }
         }
@@ -103,27 +90,21 @@ pub fn set(details: &str, state: Option<&str>, start: Option<i64>) {
             log(&format!("set: set_activity FAILED - {}, attempting reconnect", e));
             let app_id = client.client_id.clone();
 
-            match DiscordIpcClient::new(&app_id) {
-                Ok(mut new_client) => {
-                    match new_client.connect() {
+            let mut new_client = DiscordIpcClient::new(&app_id);
+            match new_client.connect() {
+                Ok(_) => {
+                    match new_client.set_activity(act) {
                         Ok(_) => {
-                            match new_client.set_activity(act) {
-                                Ok(_) => {
-                                    log("set: reconnect + activity set successfully");
-                                    *guard = Some(new_client);
-                                }
-                                Err(e2) => {
-                                    log(&format!("set: reconnect set_activity FAILED - {}", e2));
-                                }
-                            }
+                            log("set: reconnect + activity set successfully");
+                            *guard = Some(new_client);
                         }
                         Err(e2) => {
-                            log(&format!("set: reconnect connect FAILED - {}", e2));
+                            log(&format!("set: reconnect set_activity FAILED - {}", e2));
                         }
                     }
                 }
                 Err(e2) => {
-                    log(&format!("set: reconnect client creation FAILED - {}", e2));
+                    log(&format!("set: reconnect connect FAILED - {}", e2));
                 }
             }
         }

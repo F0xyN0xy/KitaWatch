@@ -431,7 +431,7 @@ pub fn discord_presence_set(
     let mut guard = DISCORD_CLIENT.lock().map_err(|e| e.to_string())?;
 
     if guard.is_none() {
-        let mut client = DiscordIpcClient::new(&app_id).map_err(|e| e.to_string())?;
+        let mut client = DiscordIpcClient::new(&app_id);
         client.connect().map_err(|e| e.to_string())?;
         *guard = Some(client);
     }
@@ -449,7 +449,7 @@ pub fn discord_presence_set(
     }
 
     if client.set_activity(act).is_err() {
-        let mut client = DiscordIpcClient::new(&app_id).map_err(|e| e.to_string())?;
+        let mut client = DiscordIpcClient::new(&app_id);
         client.connect().map_err(|e| e.to_string())?;
         let mut act = activity::Activity::new().details(&details);
         if let Some(ref s) = state {
