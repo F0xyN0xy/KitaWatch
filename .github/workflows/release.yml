@@ -16,6 +16,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -62,7 +64,6 @@ jobs:
           printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=https://kitawatch.free.nf/?oauth_callback=anilist\n' \
             "$ANILIST_CLIENT_ID" "$ANILIST_CLIENT_SECRET" > src-tauri/.env
 
-
       - name: Install Anivexa deps
         run: npm install --prefix api/anivexa
 
@@ -82,3 +83,26 @@ jobs:
           releaseName: 'KitaWatch ${{ github.ref_name }}'
           releaseDraft: false
           prerelease: false
+
+      - name: Generate release notes from merged changes
+        if: matrix.platform == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
+          if [ -n "$previous_tag" ]; then
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
+              -f previous_tag_name="$previous_tag" --jq .body)"
+          else
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" --jq .body)"
+          fi
+
+          release_id="$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)"
+          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -f body="$notes"
