@@ -10,9 +10,9 @@
 //! presence, port/HTTP probes, startup notes and recent sidecar logs into a
 //! single paste-able string (Settings → "Copy debug report").
 
+use futures_util::StreamExt;
 use serde_json::json;
 use std::io::{Read as _, Write as _};
-use futures_util::StreamExt;
 use std::net::TcpStream;
 use std::time::Duration;
 use tauri::Manager;
@@ -54,7 +54,11 @@ pub async fn exchange_anilist_token(
         .unwrap_or_else(|| env_or("ANILIST_REDIRECT_URI", None));
 
     if cid.is_empty() || csec.is_empty() {
-        eprintln!("[kitawatch] anilist token exchange: missing credentials (cid_empty={}, csec_empty={})", cid.is_empty(), csec.is_empty());
+        eprintln!(
+            "[kitawatch] anilist token exchange: missing credentials (cid_empty={}, csec_empty={})",
+            cid.is_empty(),
+            csec.is_empty()
+        );
     }
 
     let res = reqwest::Client::new()
@@ -90,7 +94,6 @@ pub async fn exchange_anilist_token(
         .ok_or_else(|| "AniList returned no access_token".to_string())
 }
 
-
 /// Download a direct, non-HLS MP4 file into KitaWatch's app-data downloads folder.
 /// Only HTTPS video/mp4 or application/octet-stream responses are accepted; HLS
 /// manifests, embedded players, and non-HTTPS URLs are deliberately unsupported.
@@ -102,7 +105,11 @@ pub async fn download_episode(
     referer: Option<String>,
 ) -> Result<String, String> {
     let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid download URL".to_string())?;
-    if parsed.scheme() != "https" || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
         return Err("Downloads require a public HTTPS media URL".to_string());
     }
 
@@ -111,8 +118,16 @@ pub async fn download_episode(
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(80)
         .collect();
-    let safe_stem = if safe_stem.is_empty() { "episode-download".to_string() } else { safe_stem };
-    let directory = app.path().app_data_dir().map_err(|e| e.to_string())?.join("downloads");
+    let safe_stem = if safe_stem.is_empty() {
+        "episode-download".to_string()
+    } else {
+        safe_stem
+    };
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("downloads");
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
 
     let client = reqwest::Client::builder()
@@ -123,7 +138,8 @@ pub async fn download_episode(
     let mut request = client.get(parsed);
     if let Some(value) = referer {
         if let Ok(referer_url) = reqwest::Url::parse(&value) {
-            if matches!(referer_url.scheme(), "https" | "http") && referer_url.host_str().is_some() {
+            if matches!(referer_url.scheme(), "https" | "http") && referer_url.host_str().is_some()
+            {
                 if let Ok(header) = reqwest::header::HeaderValue::from_str(referer_url.as_str()) {
                     request = request.header(reqwest::header::REFERER, header);
                 }
@@ -131,14 +147,20 @@ pub async fn download_episode(
         }
     }
 
-    let response = request.send().await.map_err(|e| format!("Download request failed: {e}"))?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Download request failed: {e}"))?;
     if !response.status().is_success() {
         return Err(format!("Media server returned {}", response.status()));
     }
     if response.url().scheme() != "https" {
-        return Err("The media server redirected to a non-HTTPS URL; download cancelled".to_string());
+        return Err(
+            "The media server redirected to a non-HTTPS URL; download cancelled".to_string(),
+        );
     }
-    let content_type = response.headers()
+    let content_type = response
+        .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
@@ -148,11 +170,21 @@ pub async fn download_episode(
         .trim()
         .to_ascii_lowercase();
     if content_type != "video/mp4" && content_type != "application/octet-stream" {
-        return Err(format!("Unsupported media type: {}. Only direct MP4 files can be saved.", if content_type.is_empty() { "unknown" } else { &content_type }));
+        return Err(format!(
+            "Unsupported media type: {}. Only direct MP4 files can be saved.",
+            if content_type.is_empty() {
+                "unknown"
+            } else {
+                &content_type
+            }
+        ));
     }
 
     const MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-    if response.content_length().is_some_and(|size| size > MAX_BYTES) {
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_BYTES)
+    {
         return Err("This file exceeds the 2 GiB download limit".to_string());
     }
 
@@ -171,7 +203,8 @@ pub async fn download_episode(
         }
         file.flush().map_err(|e| e.to_string())?;
         Ok(())
-    }.await;
+    }
+    .await;
     drop(file);
     if let Err(error) = stream_result {
         let _ = std::fs::remove_file(&temp_path);
@@ -274,7 +307,11 @@ pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, Strin
             }
             Err(e) => push!(r, "resource_dir read error: {e}"),
         }
-        push!(r, ".env at resource_dir/.env exists={}", res_dir.join(".env").exists());
+        push!(
+            r,
+            ".env at resource_dir/.env exists={}",
+            res_dir.join(".env").exists()
+        );
     } else {
         push!(r, "resource_dir=FAILED to resolve");
     }
@@ -283,10 +320,19 @@ pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, Strin
         exe.pop();
         push!(r, "exe_dir={}", exe.display());
         push!(r, "exe_dir/.env exists={}", exe.join(".env").exists());
-        push!(r, "exe_dir/resources/.env exists={}", exe.join("resources/.env").exists());
+        push!(
+            r,
+            "exe_dir/resources/.env exists={}",
+            exe.join("resources/.env").exists()
+        );
     }
     if let Ok(v) = std::env::var("ANILIST_CLIENT_ID") {
-        push!(r, "ANILIST_CLIENT_ID len={} prefix={}", v.len(), &v[..v.len().min(4)]);
+        push!(
+            r,
+            "ANILIST_CLIENT_ID len={} prefix={}",
+            v.len(),
+            &v[..v.len().min(4)]
+        );
         // also check if .env was loaded but empty
         if v.is_empty() {
             push!(r, "WARNING: ANILIST_CLIENT_ID is empty - .env exists but value empty (GitHub secrets missing?)");
@@ -335,14 +381,21 @@ pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, Strin
         for base in &candidates_base {
             for cand in [
                 base.join(format!("{name}{ext}")),
-                base.join(format!("{}-{}{}", name, crate::api_sidecar::SIDE_TRIPLE, ext)),
+                base.join(format!(
+                    "{}-{}{}",
+                    name,
+                    crate::api_sidecar::SIDE_TRIPLE,
+                    ext
+                )),
             ] {
                 if cand.exists() {
                     found = Some(cand);
                     break;
                 }
             }
-            if found.is_some() { break; }
+            if found.is_some() {
+                break;
+            }
         }
         match found {
             Some(p) => {
@@ -351,15 +404,29 @@ pub async fn collect_debug_report(app: tauri::AppHandle) -> Result<String, Strin
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::PermissionsExt;
-                        std::fs::metadata(&p).map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+                        std::fs::metadata(&p)
+                            .map(|m| m.permissions().mode() & 0o111 != 0)
+                            .unwrap_or(false)
                     }
                     #[cfg(not(unix))]
-                    { true }
+                    {
+                        true
+                    }
                 };
-                push!(r, "  {name}: FOUND ({}, {} bytes, executable={})", p.display(), size, executable);
+                push!(
+                    r,
+                    "  {name}: FOUND ({}, {} bytes, executable={})",
+                    p.display(),
+                    size,
+                    executable
+                );
             }
             None => {
-                let searched = candidates_base.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
+                let searched = candidates_base
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 push!(r, "  {name}: MISSING (searched: {})", searched);
             }
         }

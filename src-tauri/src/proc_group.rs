@@ -62,7 +62,9 @@ mod windows {
         unsafe {
             let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
             if job.is_null() {
-                eprintln!("[kitawatch] warning: CreateJobObjectW failed — sidecars may outlive the app");
+                eprintln!(
+                    "[kitawatch] warning: CreateJobObjectW failed — sidecars may outlive the app"
+                );
                 return job;
             }
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();

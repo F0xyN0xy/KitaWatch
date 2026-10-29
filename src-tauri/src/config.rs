@@ -79,7 +79,10 @@ pub fn load_with_resource_dir(resource_dir: &std::path::Path) {
         found |= try_load(&parent.join(".env"));
     }
     if !found {
-        eprintln!("[kitawatch] load_with_resource_dir: no .env under {}", resource_dir.display());
+        eprintln!(
+            "[kitawatch] load_with_resource_dir: no .env under {}",
+            resource_dir.display()
+        );
     }
     load();
 }

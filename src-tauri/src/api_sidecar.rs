@@ -90,7 +90,10 @@ pub const SIDE_TRIPLE: &str = "x86_64-pc-windows-msvc";
 pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 pub const SIDE_TRIPLE: &str = "aarch64-unknown-linux-gnu";
-#[cfg(all(target_os = "linux", not(any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(all(
+    target_os = "linux",
+    not(any(target_arch = "x86_64", target_arch = "aarch64"))
+))]
 pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 #[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
 pub const SIDE_TRIPLE: &str = "x86_64-unknown-linux-gnu";
@@ -156,9 +159,17 @@ mod imp {
             python()
         };
         let mut cmd = Command::new(interpreter);
-        cmd.args(["-m", "uvicorn", app, "--host", "127.0.0.1", "--port", &port.to_string()])
-            .env("KITAWATCH_LOG_DIR", logs)
-            .current_dir(dir);
+        cmd.args([
+            "-m",
+            "uvicorn",
+            app,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            &port.to_string(),
+        ])
+        .env("KITAWATCH_LOG_DIR", logs)
+        .current_dir(dir);
         crate::proc_group::configure(&mut cmd);
         match cmd.spawn() {
             Ok(child) => {
@@ -260,7 +271,11 @@ mod imp {
             candidates.push(exe.join("binaries").join(&plain));
             candidates.push(exe.join("binaries").join(&tripled));
             // Linux deb: exe in /usr/bin, libs in /usr/lib/<app>
-            for extra in ["../lib/kitawatch", "../lib/com.kitawatch.app", "../lib/kitawatch/resources"] {
+            for extra in [
+                "../lib/kitawatch",
+                "../lib/com.kitawatch.app",
+                "../lib/kitawatch/resources",
+            ] {
                 let base = exe.join(extra);
                 candidates.push(base.join(&plain));
                 candidates.push(base.join(&tripled));
@@ -376,19 +391,17 @@ mod imp {
         let _ = std::fs::create_dir_all(logs);
         let log_path = logs.join(format!("{name}.log"));
         let log_ok = match OpenOptions::new().create(true).append(true).open(&log_path) {
-            Ok(file) => {
-                match (file.try_clone(), file.try_clone()) {
-                    (Ok(out), Ok(err)) => {
-                        cmd.stdout(Stdio::from(out)).stderr(Stdio::from(err));
-                        true
-                    }
-                    _ => {
-                        note(format!("cannot clone log file handle for {name}"));
-                        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-                        false
-                    }
+            Ok(file) => match (file.try_clone(), file.try_clone()) {
+                (Ok(out), Ok(err)) => {
+                    cmd.stdout(Stdio::from(out)).stderr(Stdio::from(err));
+                    true
                 }
-            }
+                _ => {
+                    note(format!("cannot clone log file handle for {name}"));
+                    cmd.stdout(Stdio::null()).stderr(Stdio::null());
+                    false
+                }
+            },
             Err(e) => {
                 note(format!("cannot open {log_path:?} for sidecar logs: {e} — spawning without log redirection"));
                 cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -428,13 +441,17 @@ mod imp {
         let logs = super::log_dir(app);
 
         if !port_open("127.0.0.1:8000") {
-            if let Some(exe) = bundled_exe_with_app("kitawatch-kuhi-api", app).or_else(|| bundled_exe("kitawatch-kuhi-api")) {
+            if let Some(exe) = bundled_exe_with_app("kitawatch-kuhi-api", app)
+                .or_else(|| bundled_exe("kitawatch-kuhi-api"))
+            {
                 let mut cmd = Command::new(&exe);
                 cmd.env("PORT", "8000");
                 eprintln!("[kitawatch] spawning kuhi-api from {}", exe.display());
                 if let Some(c) = spawn_logged("kitawatch-kuhi-api", &logs, cmd) {
-                    eprintln!("[kitawatch] started bundled kuhi-api on 127.0.0.1:8000 (log: {})",
-                        logs.join("kitawatch-kuhi-api.log").display());
+                    eprintln!(
+                        "[kitawatch] started bundled kuhi-api on 127.0.0.1:8000 (log: {})",
+                        logs.join("kitawatch-kuhi-api.log").display()
+                    );
                     procs.push(("Kuhi API", Proc::Bundled(c)));
                 } else {
                     note(format!("failed to spawn kuhi-api from {}", exe.display()));
@@ -445,13 +462,17 @@ mod imp {
         }
 
         if !port_open("127.0.0.1:8001") {
-            if let Some(exe) = bundled_exe_with_app("kitawatch-proxy", app).or_else(|| bundled_exe("kitawatch-proxy")) {
+            if let Some(exe) = bundled_exe_with_app("kitawatch-proxy", app)
+                .or_else(|| bundled_exe("kitawatch-proxy"))
+            {
                 let mut cmd = Command::new(&exe);
                 cmd.env("PORT", "8001");
                 eprintln!("[kitawatch] spawning proxy from {}", exe.display());
                 if let Some(c) = spawn_logged("kitawatch-proxy", &logs, cmd) {
-                    eprintln!("[kitawatch] started bundled proxy on 127.0.0.1:8001 (log: {})",
-                        logs.join("kitawatch-proxy.log").display());
+                    eprintln!(
+                        "[kitawatch] started bundled proxy on 127.0.0.1:8001 (log: {})",
+                        logs.join("kitawatch-proxy.log").display()
+                    );
                     procs.push(("proxy", Proc::Bundled(c)));
                 } else {
                     note(format!("failed to spawn proxy from {}", exe.display()));
@@ -462,13 +483,17 @@ mod imp {
         }
 
         if !port_open("127.0.0.1:4000") {
-            if let Some(exe) = bundled_exe_with_app("kitawatch-anivexa", app).or_else(|| bundled_exe("kitawatch-anivexa")) {
+            if let Some(exe) = bundled_exe_with_app("kitawatch-anivexa", app)
+                .or_else(|| bundled_exe("kitawatch-anivexa"))
+            {
                 let mut anivexa_cmd = Command::new(&exe);
                 anivexa_cmd.env("PORT", "4000");
                 eprintln!("[kitawatch] spawning anivexa from {}", exe.display());
                 if let Some(c) = spawn_logged("kitawatch-anivexa", &logs, anivexa_cmd) {
-                    eprintln!("[kitawatch] started bundled anivexa on 127.0.0.1:4000 (log: {})",
-                        logs.join("kitawatch-anivexa.log").display());
+                    eprintln!(
+                        "[kitawatch] started bundled anivexa on 127.0.0.1:4000 (log: {})",
+                        logs.join("kitawatch-anivexa.log").display()
+                    );
                     procs.push(("Anivexa API", Proc::Bundled(c)));
                 } else {
                     note(format!("failed to spawn anivexa from {}", exe.display()));
@@ -508,11 +533,7 @@ fn kill_stragglers() {
     use std::process::{Command, Stdio};
     // Use pkill -x (exact match) first, then -f fallback. -x avoids killing the main app
     // if its cmdline happens to contain the sidecar name (e.g. AppImage).
-    for name in [
-        "kitawatch-kuhi-api",
-        "kitawatch-proxy",
-        "kitawatch-anivexa",
-    ] {
+    for name in ["kitawatch-kuhi-api", "kitawatch-proxy", "kitawatch-anivexa"] {
         // exact binary name
         let _ = Command::new("pkill")
             .arg("-x")

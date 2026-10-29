@@ -79,7 +79,10 @@ pub fn set(details: &str, state: Option<&str>, start: Option<i64>) {
         act = act.timestamps(activity::Timestamps::new().start(ts));
     }
 
-    log(&format!("set: setting activity details={:?} state={:?}", details, state));
+    log(&format!(
+        "set: setting activity details={:?} state={:?}",
+        details, state
+    ));
 
     // Try to set activity; reconnect on failure
     match client.set_activity(act.clone()) {
@@ -87,22 +90,23 @@ pub fn set(details: &str, state: Option<&str>, start: Option<i64>) {
             log("set: activity set successfully");
         }
         Err(e) => {
-            log(&format!("set: set_activity FAILED - {}, attempting reconnect", e));
+            log(&format!(
+                "set: set_activity FAILED - {}, attempting reconnect",
+                e
+            ));
             let app_id = client.client_id.clone();
 
             let mut new_client = DiscordIpcClient::new(&app_id);
             match new_client.connect() {
-                Ok(_) => {
-                    match new_client.set_activity(act) {
-                        Ok(_) => {
-                            log("set: reconnect + activity set successfully");
-                            *guard = Some(new_client);
-                        }
-                        Err(e2) => {
-                            log(&format!("set: reconnect set_activity FAILED - {}", e2));
-                        }
+                Ok(_) => match new_client.set_activity(act) {
+                    Ok(_) => {
+                        log("set: reconnect + activity set successfully");
+                        *guard = Some(new_client);
                     }
-                }
+                    Err(e2) => {
+                        log(&format!("set: reconnect set_activity FAILED - {}", e2));
+                    }
+                },
                 Err(e2) => {
                     log(&format!("set: reconnect connect FAILED - {}", e2));
                 }
