@@ -602,7 +602,7 @@ function MediaPlayer({
         if (!player.video.paused && !player.video.seeking && lastObservedTime !== null) {
           const delta = currentTime - lastObservedTime;
           // Ignore large jumps (seeks) and backwards timeline changes.
-          if (delta > 0 && delta <= 5) watchedSeconds += delta;
+          if (delta > 0 && delta <= 15) watchedSeconds += delta;
         }
         lastObservedTime = currentTime;
 
@@ -644,13 +644,24 @@ function MediaPlayer({
         }
       };
       const onStop = () => savePosition(true);
+      const onSeeking = () => {
+        // A seek breaks the continuity of watched-time measurement.
+        lastObservedTime = null;
+      };
+      const onSeeked = () => {
+        lastObservedTime = player.currentTime;
+      };
       player.video.addEventListener('timeupdate', onTime);
       player.video.addEventListener('pause', onStop);
       player.video.addEventListener('ended', onStop);
+      player.video.addEventListener('seeking', onSeeking);
+      player.video.addEventListener('seeked', onSeeked);
       disposers.push(() => {
         player.video.removeEventListener('timeupdate', onTime);
         player.video.removeEventListener('pause', onStop);
         player.video.removeEventListener('ended', onStop);
+        player.video.removeEventListener('seeking', onSeeking);
+        player.video.removeEventListener('seeked', onSeeked);
       });
     };
 
