@@ -279,7 +279,9 @@ export default function Leaderboard() {
           <Trophy className="h-10 w-10 text-zinc-700" />
           <h3 className="mt-3 font-semibold text-zinc-300">No rankings yet</h3>
           <p className="mt-1 max-w-md text-sm text-zinc-500">
-            There are no opted-in accounts with qualifying watched episodes for this period yet. Opt in above and keep watching to take a place.
+            {metric === 'episodes'
+              ? 'No opted-in accounts have completed an episode during this period yet. Reach 80% of an episode to earn episode credit.'
+              : 'No opted-in accounts have recorded playback time during this period yet. Keep watching supported direct-media streams to build your total.'}
           </p>
         </div>
       ) : (
