@@ -63,3 +63,19 @@ Before enabling the GitHub webhook, confirm WispByte provides both (a) a persist
 - Comments are mirrored only after approval. Bot-generated mirror messages are marked and ignored on the return path to avoid loops.
 - The service does not edit GitHub issue descriptions when the Discord starter post is edited.
 - Keep the GitHub token and webhook secret private. Use the narrowest token permissions possible.
+
+## Community statistics and bot presence
+
+The bot can publish a rotating Discord activity and a `/stats` slash command using real KitaWatch statistics:
+
+- **Registered accounts** are counted from Supabase Auth, including anonymous accounts.
+- **Discord-linked accounts** are counted separately from the providers linked to each Auth user.
+- **GitHub release downloads** are the sum of download counts for assets attached to published releases. This is not a count of unique people or installations.
+
+Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the hosting provider's private environment-variable panel to enable account counts. The service-role key is highly privileged: keep it only on the bot server, never put it in the desktop app, website, source control, or Discord. The bot uses the Supabase Auth Admin list-users endpoint server-side and paginates through users so anonymous accounts are included.
+
+The existing `GITHUB_TOKEN` is also used to read release assets. For a fine-grained token, grant **Contents: read** in addition to the Issues permissions needed by the feedback bridge.
+
+The bot registers `/stats` as a guild command when it connects. Its activity rotates between registered-account and GitHub-download totals when those values are available. `COMMUNITY_STATS_REFRESH_MS` controls the refresh/rotation interval; values are clamped to at least one minute. The default is 15 minutes.
+
+No individual user data is exposed by `/stats`; it returns aggregate counts only. The bot does not label registered accounts as active users because the app does not currently have a reliable active-user measurement.
