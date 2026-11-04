@@ -262,7 +262,10 @@ begin
   from totals
   join public.profiles as profiles on profiles.id = totals.user_id
   where profiles.leaderboard_visible = true
-    and (totals.episode_count > 0 or totals.watched_seconds > 0)
+    and (
+      (p_metric = 'episodes' and totals.episode_count > 0)
+      or (p_metric = 'watch_time' and totals.watched_seconds > 0)
+    )
   order by
     case when p_metric = 'watch_time' then totals.watched_seconds else totals.episode_count end desc,
     profiles.display_name asc,
