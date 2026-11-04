@@ -6,6 +6,7 @@ import Header from '@/components/layout/Header';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { completeLogin, isLoginPending } from '@/services/authFlow';
 import { completeDiscordOAuth } from '@/services/discordAuth';
+import { ensureGuestSession } from '@/services/guestSession';
 import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -150,6 +151,15 @@ export default function App() {
         `[kitawatch][startup-timing] React app shell committed in ${(performance.now() - navigationStart).toFixed(1)}ms`,
       );
     }
+  }, []);
+
+  useEffect(() => {
+    void ensureGuestSession().catch((error) => {
+      // Avoid logging provider responses or session details.
+      console.error('[kitawatch][auth] Guest session initialization failed.', {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+    });
   }, []);
 
   useEffect(() => {
