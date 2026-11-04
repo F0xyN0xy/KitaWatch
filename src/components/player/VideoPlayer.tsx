@@ -680,6 +680,8 @@ function MediaPlayer({
       };
       const onPlay = () => {
         lastObservedTime = player.currentTime;
+        // Retry a batch that may have failed just before the player was paused.
+        syncPlaybackProgress();
       };
       const onStop = () => {
         savePosition(true);
