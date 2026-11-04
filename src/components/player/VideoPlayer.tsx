@@ -10,7 +10,8 @@ import { useIntroSkip } from '@/hooks/useIntroSkip';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { pushProgress } from '@/services/progressSync';
-import { recordWatchEvent } from '@/services/watchEvents';
+import { recordPlaybackProgress } from '@/services/watchEvents';
+import { getForwardPlaybackDelta } from '@/services/watchTime';
 import { peekAnimeInfo } from '@/services/info';
 import { classifySourceKind, isDirectMedia, subtitleFormat } from '@/services/sourceType';
 
@@ -316,12 +317,23 @@ function MediaPlayer({
     // AniList progress should update when a viewer reaches 80% of an episode,
     // not only when the media emits its ended event.
     let progressCommitted = false;
-    // Count only small forward playback deltas. Seeking and paused time do not
-    // contribute to leaderboard watch time.
-    let watchedSeconds = 0;
+    // Accumulate small forward-playback deltas and sync them incrementally.
+    // The database stores progress across sessions and deduplicates each batch.
     let lastObservedTime: number | null = null;
-    let watchEventCommitted = false;
-    const clientEventId = crypto.randomUUID();
+    let pendingWatchedSeconds = 0;
+    let pendingProgressBatch: {
+      clientEventId: string;
+      sessionId: string;
+      animeId: number;
+      episodeNumber: number;
+      positionSeconds: number;
+      watchedSecondsDelta: number;
+      episodeDurationSeconds: number;
+    } | null = null;
+    let progressSyncInFlight = false;
+    let lastProgressSyncAttemptAt = 0;
+    const playbackSessionId = crypto.randomUUID();
+    let flushPlaybackProgress: (() => void) | null = null;
     // Listeners wired after art creation; cleaned up by the effect return.
     const disposers: (() => void)[] = [];
 
@@ -597,16 +609,63 @@ function MediaPlayer({
           .getState()
           .updatePosition(Number(animeId), episodeNumber, player.currentTime, d);
       };
+      const syncPlaybackProgress = () => {
+        const duration = player.duration;
+        if (!Number.isFinite(duration) || duration < 60 || duration > 10800) return;
+
+        if (!pendingProgressBatch) {
+          const delta = Math.floor(pendingWatchedSeconds);
+          if (delta < 1) return;
+          pendingWatchedSeconds -= delta;
+          pendingProgressBatch = {
+            clientEventId: crypto.randomUUID(),
+            sessionId: playbackSessionId,
+            animeId: Number(animeId),
+            episodeNumber,
+            positionSeconds: Math.max(0, Math.min(Math.floor(player.currentTime), Math.floor(duration))),
+            watchedSecondsDelta: delta,
+            episodeDurationSeconds: Math.round(duration),
+          };
+        }
+
+        if (progressSyncInFlight || Date.now() - lastProgressSyncAttemptAt < 10_000) return;
+        const batch = pendingProgressBatch;
+        if (!batch) return;
+
+        progressSyncInFlight = true;
+        lastProgressSyncAttemptAt = Date.now();
+        void recordPlaybackProgress(batch)
+          .then(() => {
+            if (pendingProgressBatch === batch) pendingProgressBatch = null;
+            progressSyncInFlight = false;
+            if (pendingWatchedSeconds >= 15) syncPlaybackProgress();
+          })
+          .catch((error: unknown) => {
+            // Keep the same event ID and payload for a safe retry. If the
+            // server committed but the response was lost, the RPC deduplicates it.
+            progressSyncInFlight = false;
+            console.warn('[KitaWatch] Could not sync playback progress.', {
+              errorType: error instanceof Error ? error.name : typeof error,
+            });
+          });
+      };
+      flushPlaybackProgress = syncPlaybackProgress;
+
       const onTime = () => {
         const currentTime = player.currentTime;
-        if (!player.video.paused && !player.video.seeking && lastObservedTime !== null) {
-          const delta = currentTime - lastObservedTime;
-          // Ignore large jumps (seeks) and backwards timeline changes.
-          if (delta > 0 && delta <= 15) watchedSeconds += delta;
+        if (lastObservedTime !== null) {
+          pendingWatchedSeconds += getForwardPlaybackDelta(
+            lastObservedTime,
+            currentTime,
+            player.video.paused,
+            player.video.seeking,
+          );
         }
         lastObservedTime = currentTime;
 
         savePosition();
+        if (pendingWatchedSeconds >= 15) syncPlaybackProgress();
+
         const duration = player.duration;
         if (
           !progressCommitted &&
@@ -618,33 +677,15 @@ function MediaPlayer({
           progressCommitted = true;
           pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
         }
-
-        // Leaderboard credit is based on time actually played, not the
-        // current playback position, so jumping forward cannot earn an entry.
-        if (
-          !watchEventCommitted &&
-          !player.video.paused &&
-          !player.video.seeking &&
-          Number.isFinite(duration) &&
-          duration >= 60 &&
-          duration <= 10800 &&
-          watchedSeconds >= duration * 0.8
-        ) {
-          watchEventCommitted = true;
-          void recordWatchEvent({
-            clientEventId,
-            animeId: Number(animeId),
-            episodeNumber,
-            watchedSeconds: Math.min(watchedSeconds, duration),
-            episodeDurationSeconds: duration,
-          }).catch((error: unknown) => {
-            console.warn('[KitaWatch] Could not record leaderboard watch event.', {
-              errorType: error instanceof Error ? error.name : typeof error,
-            });
-          });
-        }
       };
-      const onStop = () => savePosition(true);
+      const onPlay = () => {
+        lastObservedTime = player.currentTime;
+      };
+      const onStop = () => {
+        savePosition(true);
+        lastObservedTime = null;
+        syncPlaybackProgress();
+      };
       const onSeeking = () => {
         // A seek breaks the continuity of watched-time measurement.
         lastObservedTime = null;
@@ -653,12 +694,14 @@ function MediaPlayer({
         lastObservedTime = player.currentTime;
       };
       player.video.addEventListener('timeupdate', onTime);
+      player.video.addEventListener('play', onPlay);
       player.video.addEventListener('pause', onStop);
       player.video.addEventListener('ended', onStop);
       player.video.addEventListener('seeking', onSeeking);
       player.video.addEventListener('seeked', onSeeked);
       disposers.push(() => {
         player.video.removeEventListener('timeupdate', onTime);
+        player.video.removeEventListener('play', onPlay);
         player.video.removeEventListener('pause', onStop);
         player.video.removeEventListener('ended', onStop);
         player.video.removeEventListener('seeking', onSeeking);
@@ -671,6 +714,7 @@ function MediaPlayer({
     // Cleanup is registered synchronously here 窶・never from inside the async
     // init (React ignores a function returned from a promise).
     return () => {
+      flushPlaybackProgress?.();
       cancelled = true;
       for (const dispose of disposers) dispose();
       hls?.destroy();
