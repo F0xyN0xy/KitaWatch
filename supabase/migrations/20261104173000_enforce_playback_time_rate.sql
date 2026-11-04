@@ -72,8 +72,8 @@ begin
   end if;
 
   -- Count every session for this account. The short rolling window prevents
-  -- a client from submitting many intervals immediately; the hourly cap
-  -- limits total credited time to approximately real elapsed time.
+  -- a client from submitting many intervals immediately. Both limits
+  -- allow up to 2x media-time credit for the built-in playback-speed control.
   select
     (count(*) filter (
       where events.created_at > now() - interval '1 hour'
@@ -95,25 +95,25 @@ begin
   from public.playback_progress_events as events
   where events.user_id = current_user_id;
 
-  if recent_event_count > 300 then
+  if recent_event_count > 600 then
     raise exception 'Playback progress request limit reached' using errcode = 'P0001';
   end if;
 
   five_minute_budget := least(
-    330::bigint,
+    630::bigint,
     greatest(
       30::bigint,
-      floor(extract(epoch from (now() - oldest_five_minute_event)))::bigint + 30
+      floor(extract(epoch from (now() - oldest_five_minute_event)) * 2)::bigint + 30
     )
   );
 
   if five_minute_seconds > five_minute_budget then
-    raise exception 'Playback progress exceeds the real-time five-minute allowance'
+    raise exception 'Playback progress exceeds the 2x five-minute allowance'
       using errcode = 'P0001';
   end if;
 
-  if one_hour_seconds > 3630 then
-    raise exception 'Playback progress exceeds the hourly watch-time allowance'
+  if one_hour_seconds > 7230 then
+    raise exception 'Playback progress exceeds the 2x hourly watch-time allowance'
       using errcode = 'P0001';
   end if;
 
