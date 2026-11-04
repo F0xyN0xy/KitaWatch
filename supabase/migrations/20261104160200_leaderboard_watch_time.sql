@@ -188,6 +188,7 @@ grant execute on function public.record_playback_progress(uuid, uuid, integer, n
 
 -- The RPC now returns both metrics and ranks by the selected metric.
 drop function if exists public.get_leaderboard(text, integer);
+drop function if exists public.get_leaderboard(text, integer, text);
 
 create function public.get_leaderboard(
   p_period text default 'weekly',
