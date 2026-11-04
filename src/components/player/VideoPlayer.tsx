@@ -10,6 +10,7 @@ import { useIntroSkip } from '@/hooks/useIntroSkip';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { pushProgress } from '@/services/progressSync';
+import { recordWatchEvent } from '@/services/watchEvents';
 import { peekAnimeInfo } from '@/services/info';
 import { classifySourceKind, isDirectMedia, subtitleFormat } from '@/services/sourceType';
 
@@ -315,6 +316,12 @@ function MediaPlayer({
     // AniList progress should update when a viewer reaches 80% of an episode,
     // not only when the media emits its ended event.
     let progressCommitted = false;
+    // Count only small forward playback deltas. Seeking and paused time do not
+    // contribute to leaderboard watch time.
+    let watchedSeconds = 0;
+    let lastObservedTime: number | null = null;
+    let watchEventCommitted = false;
+    const clientEventId = crypto.randomUUID();
     // Listeners wired after art creation; cleaned up by the effect return.
     const disposers: (() => void)[] = [];
 
@@ -591,6 +598,14 @@ function MediaPlayer({
           .updatePosition(Number(animeId), episodeNumber, player.currentTime, d);
       };
       const onTime = () => {
+        const currentTime = player.currentTime;
+        if (!player.video.paused && !player.video.seeking && lastObservedTime !== null) {
+          const delta = currentTime - lastObservedTime;
+          // Ignore large jumps (seeks) and backwards timeline changes.
+          if (delta > 0 && delta <= 5) watchedSeconds += delta;
+        }
+        lastObservedTime = currentTime;
+
         savePosition();
         const duration = player.duration;
         if (
@@ -598,10 +613,34 @@ function MediaPlayer({
           !player.video.seeking &&
           Number.isFinite(duration) &&
           duration > 0 &&
-          player.currentTime / duration >= 0.8
+          currentTime / duration >= 0.8
         ) {
           progressCommitted = true;
           pushProgress(Number(animeId), episodeNumber, peekAnimeInfo(animeId)?.isAdult);
+        }
+
+        // Leaderboard credit is based on time actually played, not the
+        // current playback position, so jumping forward cannot earn an entry.
+        if (
+          !watchEventCommitted &&
+          !player.video.paused &&
+          !player.video.seeking &&
+          Number.isFinite(duration) &&
+          duration >= 60 &&
+          watchedSeconds >= duration * 0.8
+        ) {
+          watchEventCommitted = true;
+          void recordWatchEvent({
+            clientEventId,
+            animeId: Number(animeId),
+            episodeNumber,
+            watchedSeconds: Math.min(watchedSeconds, duration),
+            episodeDurationSeconds: duration,
+          }).catch((error: unknown) => {
+            console.warn('[KitaWatch] Could not record leaderboard watch event.', {
+              errorType: error instanceof Error ? error.name : typeof error,
+            });
+          });
         }
       };
       const onStop = () => savePosition(true);
