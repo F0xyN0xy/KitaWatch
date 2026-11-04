@@ -6,6 +6,7 @@ import Header from '@/components/layout/Header';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { completeLogin, isLoginPending } from '@/services/authFlow';
 import { completeDiscordOAuth } from '@/services/discordAuth';
+import { ensureGuestSession } from '@/services/guestSession';
 import { initWindowState } from '@/services/windowState';
 import { useUpdater } from '@/hooks/useUpdater';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -23,6 +24,7 @@ const Detail = lazy(() => import('@/pages/Detail'));
 const Watch = lazy(() => import('@/pages/Watch'));
 const MyList = lazy(() => import('@/pages/MyList'));
 const Settings = lazy(() => import('@/pages/Settings'));
+const Leaderboard = lazy(() => import('@/pages/Leaderboard'));
 const TermsPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.TermsPage })));
 const PrivacyPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.PrivacyPage })));
 const DmcaPage = lazy(() => import('@/pages/Legal').then((m) => ({ default: m.DmcaPage })));
@@ -153,6 +155,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void ensureGuestSession().catch((error) => {
+      // Avoid logging provider responses or session details.
+      console.error('[kitawatch][auth] Guest session initialization failed.', {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
     const cleanups: (() => void)[] = [];
 
@@ -234,6 +245,7 @@ export default function App() {
                 <Route path="/anime/:id" element={<Detail />} />
                 <Route path="/watch/:id/:episode" element={<div />} />
                 <Route path="/my-list" element={<MyList />} />
+                <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
