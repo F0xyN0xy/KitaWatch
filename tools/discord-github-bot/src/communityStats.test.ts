@@ -37,3 +37,21 @@ test("ignores missing and negative download counts", () => {
 
   assert.equal(sumReleaseDownloads(releases), 0);
 });
+
+test("counts anonymous Supabase users as registered accounts", async () => {
+  const fakeFetch: typeof fetch = async () =>
+    new Response(
+      JSON.stringify({
+        users: [
+          { is_anonymous: true, app_metadata: { providers: [] } },
+          { is_anonymous: false, app_metadata: { providers: ["discord"] } },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json", "x-total-count": "2" } },
+    );
+
+  const { fetchSupabaseUserStats } = await import("./communityStats.js");
+  const stats = await fetchSupabaseUserStats("https://example.supabase.co", "server-secret", fakeFetch);
+
+  assert.deepEqual(stats, { registeredUsers: 2, discordLinkedUsers: 1 });
+});
