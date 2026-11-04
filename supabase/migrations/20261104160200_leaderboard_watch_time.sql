@@ -256,7 +256,8 @@ begin
     row_number() over (
       order by
         case when p_metric = 'watch_time' then totals.watched_seconds else totals.episode_count end desc,
-        profiles.display_name asc
+        profiles.display_name asc,
+        profiles.id asc
     )
   from totals
   join public.profiles as profiles on profiles.id = totals.user_id
@@ -264,7 +265,8 @@ begin
     and (totals.episode_count > 0 or totals.watched_seconds > 0)
   order by
     case when p_metric = 'watch_time' then totals.watched_seconds else totals.episode_count end desc,
-    profiles.display_name asc
+    profiles.display_name asc,
+    profiles.id asc
   limit greatest(1, least(coalesce(p_limit, 50), 100));
 end;
 $function$;
