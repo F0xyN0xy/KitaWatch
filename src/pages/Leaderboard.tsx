@@ -40,7 +40,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
   }
 
   return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink-700 text-zinc-300">
+    <div role="img" aria-label={name} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink-700 text-zinc-300">
       <UserRound className="h-5 w-5" />
     </div>
   );
