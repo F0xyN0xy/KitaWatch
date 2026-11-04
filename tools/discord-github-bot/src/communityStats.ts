@@ -80,7 +80,8 @@ export async function fetchSupabaseUserStats(
     registeredUsers += payload.users.length;
     discordLinkedUsers += payload.users.filter(isDiscordLinkedUser).length;
 
-    const totalHeader = Number(response.headers.get("x-total-count"));
+    const totalHeaderValue = response.headers.get("x-total-count");
+    const totalHeader = totalHeaderValue === null ? Number.NaN : Number(totalHeaderValue);
     if (Number.isFinite(totalHeader) && totalHeader >= 0) {
       reportedTotal = totalHeader;
     }
