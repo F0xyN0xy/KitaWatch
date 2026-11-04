@@ -37,10 +37,10 @@ for (const key of required) {
 
 const env = process.env;
 const startedAt = new Date().toISOString();
-const statsRefreshMs = Math.max(
-  60_000,
-  Math.min(Number(env.COMMUNITY_STATS_REFRESH_MS ?? 900_000), 3_600_000),
-);
+const configuredStatsRefreshMs = Number(env.COMMUNITY_STATS_REFRESH_MS ?? 900_000);
+const statsRefreshMs = Number.isFinite(configuredStatsRefreshMs)
+  ? Math.max(60_000, Math.min(configuredStatsRefreshMs, 3_600_000))
+  : 900_000;
 
 interface CommunityStats {
   registeredUsers: number | null;
@@ -302,12 +302,13 @@ client.once(Events.ClientReady, async (readyClient) => {
     const channel = await guild.channels.fetch(env.DISCORD_FORUM_CHANNEL_ID!);
     const isForum = channel?.type === 15;
     log(isForum ? "info" : "error", "discord.forum_check", { found: Boolean(channel), isForum, channelType: channel?.type ?? null, guildId: guild.id });
-    if (!isForum) return;
-    const permissions = channel.permissionsFor(readyClient.user);
-    const requiredPermissions = ["ViewChannel", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
-    const missingPermissions = requiredPermissions.filter((permission) => !permissions?.has(permission));
-    log(missingPermissions.length ? "error" : "info", "discord.permission_check", { missingPermissions, requiredPermissions });
-    if (moderatorRoles.size === 0) log("warn", "config.no_moderator_roles", { message: "No moderator role IDs configured; nobody can approve or reject submissions." });
+    if (isForum) {
+      const permissions = channel.permissionsFor(readyClient.user);
+      const requiredPermissions = ["ViewChannel", "ReadMessageHistory", "SendMessagesInThreads", "ManageThreads"] as const;
+      const missingPermissions = requiredPermissions.filter((permission) => !permissions?.has(permission));
+      log(missingPermissions.length ? "error" : "info", "discord.permission_check", { missingPermissions, requiredPermissions });
+      if (moderatorRoles.size === 0) log("warn", "config.no_moderator_roles", { message: "No moderator role IDs configured; nobody can approve or reject submissions." });
+    }
   } catch (error) {
     log("error", "startup.discord_check_failed", { error: errorMessage(error) });
   }
