@@ -2,7 +2,7 @@ name: Discord GitHub Bot CI
 
 on:
   push:
-    branches: [main, "feat/discord-github-feedback-bot"]
+    branches: [main, "feat/discord-github-feedback-bot", "feat/discord-community-stats"]
     paths:
       - "tools/discord-github-bot/**"
       - ".github/workflows/discord-bot.yml"
@@ -27,4 +27,5 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
+      - run: npm run test
       - run: npm run build

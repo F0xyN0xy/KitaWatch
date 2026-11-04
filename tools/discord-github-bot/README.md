@@ -18,7 +18,7 @@ Create these GitHub labels in the repository before approving submissions: `bug`
 ## Requirements
 
 - Node.js 20+
-- A Discord bot invited to the server with View Channels, Send Messages, Read Message History, Manage Threads (for status/archive actions), and Use Application Commands if slash commands are added later.
+- A Discord bot installed with the `bot` and `applications.commands` OAuth2 scopes, plus View Channels, Send Messages, Read Message History, and Manage Threads (for status/archive actions) permissions.
 - Enable the **Message Content Intent** in the Discord Developer Portal.
 - Create a **Forum Channel** in a Community-enabled Discord server (not a regular text channel). Create optional forum tags such as `Pending`, `Approved`, `Rejected`, and `Resolved`, then copy their IDs into the matching environment variables.
 - Give the bot role these channel permissions on that forum and its threads: **View Channel**, **Send Messages in Threads**, **Read Message History**, and **Manage Threads**. Manage Threads is needed to change tags and archive/unarchive posts. Avoid granting Administrator.
@@ -63,3 +63,19 @@ Before enabling the GitHub webhook, confirm WispByte provides both (a) a persist
 - Comments are mirrored only after approval. Bot-generated mirror messages are marked and ignored on the return path to avoid loops.
 - The service does not edit GitHub issue descriptions when the Discord starter post is edited.
 - Keep the GitHub token and webhook secret private. Use the narrowest token permissions possible.
+
+## Community statistics and bot presence
+
+The bot can publish a rotating Discord activity and a `/stats` slash command using real KitaWatch statistics:
+
+- **Registered accounts** are counted from Supabase Auth, including anonymous accounts.
+- **Discord-linked accounts** are counted separately from the providers linked to each Auth user.
+- **GitHub release downloads** are the sum of download counts for assets attached to published releases. This is not a count of unique people or installations.
+
+Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the hosting provider's private environment-variable panel to enable account counts. The service-role key is highly privileged: keep it only on the bot server, never put it in the desktop app, website, source control, or Discord. The bot uses the Supabase Auth Admin list-users endpoint server-side and paginates through users so anonymous accounts are included.
+
+The existing `GITHUB_TOKEN` is also used to read release assets. For a fine-grained token, grant **Contents: read** in addition to the Issues permissions needed by the feedback bridge.
+
+The bot registers `/stats` as a guild command when it connects. Its activity rotates between registered-account and GitHub-download totals when those values are available. `COMMUNITY_STATS_REFRESH_MS` controls the refresh/rotation interval; values are clamped to at least one minute. The default is 15 minutes.
+
+No individual user data is exposed by `/stats`; it returns aggregate counts only. The bot does not label registered accounts as active users because the app does not currently have a reliable active-user measurement.
