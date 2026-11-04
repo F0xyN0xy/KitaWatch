@@ -315,10 +315,11 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   try {
     const rest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN!);
-    await rest.put(
-      Routes.applicationGuildCommands(readyClient.user.id, env.DISCORD_GUILD_ID!),
-      { body: [statsCommand.toJSON()] },
-    );
+    const commandRoute = Routes.applicationGuildCommands(readyClient.user.id, env.DISCORD_GUILD_ID!);
+    const existingCommands = await rest.get(commandRoute) as Array<{ name: string }>;
+    if (!existingCommands.some((command) => command.name === "stats")) {
+      await rest.post(commandRoute, { body: statsCommand.toJSON() });
+    }
     log("info", "discord.slash_commands_registered", { commands: ["stats"], guildId: env.DISCORD_GUILD_ID });
   } catch (error) {
     log("error", "discord.slash_commands_registration_failed", { error: errorMessage(error) });
