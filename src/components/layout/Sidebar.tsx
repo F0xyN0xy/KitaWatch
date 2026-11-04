@@ -5,6 +5,7 @@ import {
   TrendingUp,
   Flame,
   Bookmark,
+  Trophy,
   Settings,
   Newspaper,
 } from 'lucide-react';
@@ -20,7 +21,7 @@ const navItems = [
       (!p.startsWith('/browse') &&
         !p.startsWith('/anime') &&
         !p.startsWith('/watch') &&
-        !['/my-list', '/settings'].includes(p)),
+        !['/my-list', '/leaderboard', '/settings'].includes(p)),
   },
   {
     to: '/browse?sort=trending',
@@ -44,6 +45,12 @@ const navItems = [
     label: 'My List',
     icon: Bookmark,
     match: (p: string) => p === '/my-list',
+  },
+  {
+    to: '/leaderboard',
+    label: 'Leaderboard',
+    icon: Trophy,
+    match: (p: string) => p === '/leaderboard',
   },
   {
     to: '/settings',
