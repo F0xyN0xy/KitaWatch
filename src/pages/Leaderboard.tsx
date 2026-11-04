@@ -15,12 +15,14 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { ensureGuestSession } from '@/services/guestSession';
 
 type LeaderboardPeriod = 'weekly' | 'monthly' | 'all_time';
+type LeaderboardMetric = 'episodes' | 'watch_time';
 
 interface LeaderboardEntry {
   user_id: string;
   display_name: string;
   avatar_url: string | null;
   episode_count: number;
+  watched_seconds: number;
   rank: number;
 }
 
@@ -32,6 +34,13 @@ const PERIODS: { value: LeaderboardPeriod; label: string }[] = [
 
 function formatEpisodes(count: number) {
   return `${count} ${count === 1 ? 'episode' : 'episodes'}`;
+}
+
+function formatWatchTime(seconds: number) {
+  const totalMinutes = Math.floor(Math.max(0, seconds) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
@@ -48,6 +57,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
 
 export default function Leaderboard() {
   const [period, setPeriod] = useState<LeaderboardPeriod>('weekly');
+  const [metric, setMetric] = useState<LeaderboardMetric>('episodes');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('KitaWatch user');
@@ -90,7 +100,7 @@ export default function Leaderboard() {
             .select('display_name, leaderboard_visible')
             .eq('id', user.id)
             .maybeSingle(),
-          supabase.rpc('get_leaderboard', { p_period: period, p_limit: 50 }),
+          supabase.rpc('get_leaderboard', { p_period: period, p_limit: 50, p_metric: metric }),
         ]);
 
       if (readProfileError) throw readProfileError;
@@ -110,7 +120,7 @@ export default function Leaderboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period]);
+  }, [period, metric]);
 
   useEffect(() => {
     void loadLeaderboard();
@@ -170,7 +180,7 @@ export default function Leaderboard() {
             <div>
               <h2 className="font-semibold text-zinc-100">Leaderboard privacy</h2>
               <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500">
-                Your profile is private on the leaderboard by default. Opting in shares your display name and avatar alongside your qualifying episode count.
+                Your profile is private on the leaderboard by default. Opting in shares your display name, avatar, episode count, and accumulated watch time.
               </p>
               <p className="mt-2 text-xs text-zinc-400">
                 {isAnonymous ? 'You are using a guest account.' : 'You are using your connected KitaWatch account.'}
@@ -207,20 +217,42 @@ export default function Leaderboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white">Top watchers</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Based on qualifying completed episodes.</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {metric === 'episodes' ? 'Ranked by completed episodes.' : 'Ranked by accumulated playback time.'}
+          </p>
         </div>
-        <div className="flex rounded-lg bg-ink-900 p-1 ring-1 ring-white/10">
-          {PERIODS.map((item) => (
+        <div className="flex flex-wrap gap-2">
+          <div className="flex rounded-lg bg-ink-900 p-1 ring-1 ring-white/10">
+            {PERIODS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setPeriod(item.value)}
+                aria-pressed={period === item.value}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${period === item.value ? 'bg-accent-600/20 text-accent-300' : 'text-zinc-500 hover:text-zinc-200'}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-lg bg-ink-900 p-1 ring-1 ring-white/10">
             <button
-              key={item.value}
               type="button"
-              onClick={() => setPeriod(item.value)}
-              aria-pressed={period === item.value}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${period === item.value ? 'bg-accent-600/20 text-accent-300' : 'text-zinc-500 hover:text-zinc-200'}`}
+              onClick={() => setMetric('episodes')}
+              aria-pressed={metric === 'episodes'}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${metric === 'episodes' ? 'bg-accent-600/20 text-accent-300' : 'text-zinc-500 hover:text-zinc-200'}`}
             >
-              {item.label}
+              Episodes
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setMetric('watch_time')}
+              aria-pressed={metric === 'watch_time'}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${metric === 'watch_time' ? 'bg-accent-600/20 text-accent-300' : 'text-zinc-500 hover:text-zinc-200'}`}
+            >
+              Watch time
+            </button>
+          </div>
         </div>
       </div>
 
@@ -270,9 +302,15 @@ export default function Leaderboard() {
                     {entry.display_name || 'KitaWatch user'}
                     {isCurrentUser && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-accent-300">You</span>}
                   </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">{formatEpisodes(Number(entry.episode_count) || 0)}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {formatEpisodes(Number(entry.episode_count) || 0)} · {formatWatchTime(Number(entry.watched_seconds) || 0)}
+                  </p>
                 </div>
-                <span className="text-sm font-semibold tabular-nums text-zinc-300">{Number(entry.episode_count) || 0}</span>
+                <span className="text-sm font-semibold tabular-nums text-zinc-300">
+                  {metric === 'episodes'
+                    ? Number(entry.episode_count) || 0
+                    : formatWatchTime(Number(entry.watched_seconds) || 0)}
+                </span>
               </div>
             );
           })}
