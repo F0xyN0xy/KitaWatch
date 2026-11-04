@@ -18,7 +18,7 @@ Create these GitHub labels in the repository before approving submissions: `bug`
 ## Requirements
 
 - Node.js 20+
-- A Discord bot invited to the server with View Channels, Send Messages, Read Message History, Manage Threads (for status/archive actions), and Use Application Commands if slash commands are added later.
+- A Discord bot invited to the server with View Channels, Send Messages, Read Message History, Manage Threads (for status/archive actions), and Use Application Commands for the `/stats` slash command.
 - Enable the **Message Content Intent** in the Discord Developer Portal.
 - Create a **Forum Channel** in a Community-enabled Discord server (not a regular text channel). Create optional forum tags such as `Pending`, `Approved`, `Rejected`, and `Resolved`, then copy their IDs into the matching environment variables.
 - Give the bot role these channel permissions on that forum and its threads: **View Channel**, **Send Messages in Threads**, **Read Message History**, and **Manage Threads**. Manage Threads is needed to change tags and archive/unarchive posts. Avoid granting Administrator.
