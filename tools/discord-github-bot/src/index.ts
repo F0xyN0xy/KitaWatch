@@ -162,9 +162,9 @@ async function getCommunityStats(forceRefresh = false): Promise<CommunityStats |
     }
 
     const stats: CommunityStats = {
-      registeredUsers: userStats?.registeredUsers ?? null,
-      discordLinkedUsers: userStats?.discordLinkedUsers ?? null,
-      githubDownloads,
+      registeredUsers: userStats?.registeredUsers ?? communityStatsCache?.registeredUsers ?? null,
+      discordLinkedUsers: userStats?.discordLinkedUsers ?? communityStatsCache?.discordLinkedUsers ?? null,
+      githubDownloads: githubDownloads ?? communityStatsCache?.githubDownloads ?? null,
       updatedAt: new Date().toISOString(),
     };
     communityStatsCache = stats;
