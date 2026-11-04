@@ -37,7 +37,9 @@ function formatEpisodes(count: number) {
 }
 
 function formatWatchTime(seconds: number) {
-  const totalMinutes = Math.floor(Math.max(0, seconds) / 60);
+  const safeSeconds = Math.max(0, seconds);
+  const totalMinutes = Math.floor(safeSeconds / 60);
+  if (safeSeconds > 0 && totalMinutes === 0) return '<1m';
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
