@@ -15,6 +15,10 @@ create policy "Visible profiles and own profile are readable"
     or leaderboard_visible = true
   );
 
+-- The client may change only the opt-in column, not other profile fields.
+-- Row-level ownership is enforced by the existing UPDATE policy.
+grant update (leaderboard_visible) on table public.profiles to authenticated;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
