@@ -627,6 +627,7 @@ function MediaPlayer({
           !player.video.seeking &&
           Number.isFinite(duration) &&
           duration >= 60 &&
+          duration <= 10800 &&
           watchedSeconds >= duration * 0.8
         ) {
           watchEventCommitted = true;
