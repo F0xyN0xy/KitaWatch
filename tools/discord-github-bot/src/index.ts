@@ -7,15 +7,21 @@ import rateLimit from "express-rate-limit";
 import Database from "better-sqlite3";
 import {
   ActionRowBuilder,
+  ActivityType,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
   Client,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   Message,
+  REST,
+  Routes,
+  SlashCommandBuilder,
   ThreadChannel,
 } from "discord.js";
+import { fetchGitHubDownloadCount, fetchSupabaseUserStats } from "./communityStats.js";
 
 const required = [
   "DISCORD_TOKEN",
@@ -31,6 +37,26 @@ for (const key of required) {
 
 const env = process.env;
 const startedAt = new Date().toISOString();
+const statsRefreshMs = Math.max(
+  60_000,
+  Math.min(Number(env.COMMUNITY_STATS_REFRESH_MS ?? 900_000), 3_600_000),
+);
+
+interface CommunityStats {
+  registeredUsers: number | null;
+  discordLinkedUsers: number | null;
+  githubDownloads: number | null;
+  updatedAt: string;
+}
+
+let communityStatsCache: CommunityStats | null = null;
+let communityStatsRefreshedAt = 0;
+let communityStatsRefreshInFlight: Promise<CommunityStats | null> | null = null;
+let presenceCycle = 0;
+
+const statsCommand = new SlashCommandBuilder()
+  .setName("stats")
+  .setDescription("Show real KitaWatch community and download statistics.");
 function log(level: "info" | "warn" | "error", event: string, details: Record<string, unknown> = {}) {
   const entry = { timestamp: new Date().toISOString(), level, event, ...details };
   const line = JSON.stringify(entry);
@@ -93,6 +119,85 @@ const approvalRow = (threadId: string) =>
     new ButtonBuilder().setCustomId(`feedback:approve:${threadId}`).setLabel("Approve & create issue").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`feedback:reject:${threadId}`).setLabel("Reject").setStyle(ButtonStyle.Danger),
   );
+
+async function getCommunityStats(forceRefresh = false): Promise<CommunityStats | null> {
+  if (
+    !forceRefresh &&
+    communityStatsCache &&
+    Date.now() - communityStatsRefreshedAt < statsRefreshMs
+  ) {
+    return communityStatsCache;
+  }
+  if (communityStatsRefreshInFlight) return communityStatsRefreshInFlight;
+
+  communityStatsRefreshInFlight = (async () => {
+    const canReadSupabaseUsers = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+    const [userResult, downloadResult] = await Promise.allSettled([
+      canReadSupabaseUsers
+        ? fetchSupabaseUserStats(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!)
+        : Promise.resolve(null),
+      fetchGitHubDownloadCount(repo, env.GITHUB_TOKEN!),
+    ]);
+
+    const userStats = userResult.status === "fulfilled" ? userResult.value : null;
+    const githubDownloads = downloadResult.status === "fulfilled" ? downloadResult.value : null;
+
+    if (userResult.status === "rejected") {
+      log("warn", "community_stats.supabase_failed", { error: errorMessage(userResult.reason) });
+    } else if (!canReadSupabaseUsers) {
+      log("warn", "community_stats.supabase_not_configured", {
+        message: "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable registered-user counts.",
+      });
+    }
+
+    if (downloadResult.status === "rejected") {
+      log("warn", "community_stats.github_downloads_failed", {
+        error: errorMessage(downloadResult.reason),
+      });
+    }
+
+    if (!userStats && githubDownloads === null && !communityStatsCache) {
+      communityStatsRefreshedAt = Date.now();
+      return null;
+    }
+
+    const stats: CommunityStats = {
+      registeredUsers: userStats?.registeredUsers ?? null,
+      discordLinkedUsers: userStats?.discordLinkedUsers ?? null,
+      githubDownloads,
+      updatedAt: new Date().toISOString(),
+    };
+    communityStatsCache = stats;
+    communityStatsRefreshedAt = Date.now();
+    return stats;
+  })();
+
+  try {
+    return await communityStatsRefreshInFlight;
+  } finally {
+    communityStatsRefreshInFlight = null;
+  }
+}
+
+async function updateBotPresence(): Promise<void> {
+  if (!client.user) return;
+  const stats = await getCommunityStats();
+  if (!stats) return;
+
+  const activities: string[] = [];
+  if (stats.registeredUsers !== null) {
+    activities.push(` ${stats.registeredUsers.toLocaleString("en-US")} registered users`.trim());
+  }
+  if (stats.githubDownloads !== null) {
+    activities.push(`${stats.githubDownloads.toLocaleString("en-US")} GitHub downloads`);
+  }
+  if (activities.length === 0) return;
+
+  const activity = activities[presenceCycle % activities.length];
+  presenceCycle += 1;
+  client.user.setActivity(activity, { type: ActivityType.Watching });
+  log("info", "community_stats.presence_updated", { activity });
+}
 
 async function githubApi<T>(endpoint: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}${endpoint}`, {
@@ -206,6 +311,21 @@ client.once(Events.ClientReady, async (readyClient) => {
   } catch (error) {
     log("error", "startup.discord_check_failed", { error: errorMessage(error) });
   }
+
+  try {
+    const rest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN!);
+    await rest.put(
+      Routes.applicationGuildCommands(readyClient.user.id, env.DISCORD_GUILD_ID!),
+      { body: [statsCommand.toJSON()] },
+    );
+    log("info", "discord.slash_commands_registered", { commands: ["stats"], guildId: env.DISCORD_GUILD_ID });
+  } catch (error) {
+    log("error", "discord.slash_commands_registration_failed", { error: errorMessage(error) });
+  }
+
+  void updateBotPresence();
+  const presenceTimer = setInterval(() => void updateBotPresence(), statsRefreshMs);
+  presenceTimer.unref();
 });
 
 client.on(Events.ThreadCreate, async (thread) => {
@@ -230,6 +350,34 @@ client.on(Events.ThreadCreate, async (thread) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName !== "stats") return;
+    await interaction.deferReply();
+    try {
+      const stats = await getCommunityStats(true);
+      const format = (value: number | null) =>
+        value === null ? "Unavailable" : value.toLocaleString("en-US");
+      const embed = new EmbedBuilder()
+        .setColor(0x7656d6)
+        .setTitle("KitaWatch Community Stats")
+        .setDescription("Live statistics from KitaWatch and GitHub Releases.")
+        .addFields(
+          { name: "Registered accounts", value: format(stats?.registeredUsers ?? null), inline: true },
+          { name: "Discord-linked accounts", value: format(stats?.discordLinkedUsers ?? null), inline: true },
+          { name: "GitHub release downloads", value: format(stats?.githubDownloads ?? null), inline: true },
+        )
+        .setFooter({
+          text: "Anonymous Supabase accounts are included. Downloads count release assets, not unique installations.",
+        })
+        .setTimestamp(stats ? new Date(stats.updatedAt) : new Date());
+      await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+      log("error", "discord.stats_command_failed", { error: errorMessage(error) });
+      await interaction.editReply("KitaWatch statistics are temporarily unavailable. Please try again later.");
+    }
+    return;
+  }
+
   if (!interaction.isButton()) return;
   const match = /^feedback:(approve|reject):(\d+)$/.exec(interaction.customId);
   if (!match) return;
