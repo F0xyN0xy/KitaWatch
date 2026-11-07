@@ -12,12 +12,12 @@ type HCaptchaApi = {
     },
   ) => number;
   reset: (widgetId?: number) => void;
-  remove: (widgetId: number) => void;
 };
 
 declare global {
   interface Window {
     hcaptcha?: HCaptchaApi;
+    __kitawatchHCaptchaOnLoad?: () => void;
   }
 }
 
@@ -28,28 +28,25 @@ function loadHCaptchaScript(): Promise<void> {
   if (hcaptchaScriptPromise) return hcaptchaScriptPromise;
 
   hcaptchaScriptPromise = new Promise<void>((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[data-kitawatch-hcaptcha]',
-    );
-    const script = existingScript ?? document.createElement('script');
+    const script = document.createElement('script');
 
-    const handleLoad = () => {
+    window.__kitawatchHCaptchaOnLoad = () => {
+      delete window.__kitawatchHCaptchaOnLoad;
       if (window.hcaptcha) resolve();
       else reject(new Error('hCaptcha loaded without its API being available.'));
     };
 
-    const handleError = () => reject(new Error('Could not load the hCaptcha script.'));
-
-    script.addEventListener('load', handleLoad, { once: true });
-    script.addEventListener('error', handleError, { once: true });
-
-    if (!existingScript) {
-      script.src = 'https://js.hcaptcha.com/1/api.js?render=explicit';
-      script.async = true;
-      script.defer = true;
-      script.dataset.kitawatchHcaptcha = 'true';
-      document.head.appendChild(script);
-    }
+    script.src =
+      'https://js.hcaptcha.com/1/api.js?onload=__kitawatchHCaptchaOnLoad&render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.dataset.kitawatchHcaptcha = 'true';
+    script.onerror = () => {
+      delete window.__kitawatchHCaptchaOnLoad;
+      script.remove();
+      reject(new Error('Could not load the hCaptcha script.'));
+    };
+    document.head.appendChild(script);
   }).catch((error: unknown) => {
     hcaptchaScriptPromise = null;
     throw error;
@@ -119,7 +116,8 @@ export default function HCaptchaWidget({
     return () => {
       disposed = true;
       if (widgetIdRef.current !== null) {
-        window.hcaptcha?.remove(widgetIdRef.current);
+        window.hcaptcha?.reset(widgetIdRef.current);
+        containerRef.current?.replaceChildren();
         widgetIdRef.current = null;
       }
     };
