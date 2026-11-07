@@ -22,6 +22,7 @@ import {
   ThreadChannel,
 } from "discord.js";
 import { fetchGitHubDownloadCount, fetchSupabaseUserStats } from "./communityStats.js";
+import { createWebhookQueue, initializeWebhookQueue } from "./webhookQueue.js";
 
 const required = [
   "DISCORD_TOKEN",
@@ -92,11 +93,9 @@ db.exec(`
     state TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
-  CREATE TABLE IF NOT EXISTS webhook_deliveries (
-    delivery_id TEXT PRIMARY KEY,
-    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
 `);
+initializeWebhookQueue(db);
+const webhookQueue = createWebhookQueue(db);
 const getThread = db.prepare("SELECT * FROM feedback_threads WHERE thread_id = ?");
 const addThread = db.prepare(
   "INSERT OR IGNORE INTO feedback_threads (thread_id, guild_id, state) VALUES (?, ?, 'pending')",
@@ -108,8 +107,6 @@ const setIssue = db.prepare(
 const setState = db.prepare("UPDATE feedback_threads SET state = ? WHERE thread_id = ?");
 const claimPending = db.prepare("UPDATE feedback_threads SET state = 'creating' WHERE thread_id = ? AND state = 'pending'");
 const resetCreating = db.prepare("UPDATE feedback_threads SET state = 'pending' WHERE thread_id = ? AND state = 'creating'");
-const seenDelivery = db.prepare("SELECT delivery_id FROM webhook_deliveries WHERE delivery_id = ?");
-const saveDelivery = db.prepare("INSERT OR IGNORE INTO webhook_deliveries (delivery_id) VALUES (?)");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -325,6 +322,10 @@ client.once(Events.ClientReady, async (readyClient) => {
     log("error", "discord.slash_commands_registration_failed", { error: errorMessage(error) });
   }
 
+  void processPendingWebhooks();
+  const webhookTimer = setInterval(() => void processPendingWebhooks(), 10_000);
+  webhookTimer.unref();
+
   void updateBotPresence();
   const presenceTimer = setInterval(() => void updateBotPresence(), statsRefreshMs);
   presenceTimer.unref();
@@ -497,6 +498,110 @@ client.on(Events.MessageCreate, async (message: Message) => {
   }
 });
 
+let webhookWorkerRunning = false;
+
+async function processWebhookEvent(event: string, payload: any): Promise<void> {
+  if (event === "issue_comment" && payload.action === "created") {
+    const issueNumber = payload.issue?.number as number | undefined;
+    const comment = payload.comment;
+    if (!issueNumber || !comment?.body || hasBridgeMarker(comment.body)) return;
+    const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
+    if (!linked || linked.state !== "approved") return;
+    const thread = await getThreadChannel(linked.thread_id);
+    if (!thread) throw new Error("Linked Discord thread " + linked.thread_id + " is unavailable");
+
+    const marker = "<!-- kitawatch-bridge:github-comment:" + comment.id + " -->";
+    const recentMessages = await thread.messages.fetch({ limit: 50 });
+    if ([...recentMessages.values()].some((message) => message.content.includes(marker))) {
+      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
+      return;
+    }
+
+    await thread.send({
+      content: "**GitHub — " + (comment.user?.login ?? "user") + "**\n\n" +
+        String(comment.body).slice(0, 1800) + "\n\n[View GitHub comment](" + comment.html_url + ")\n" + marker,
+      allowedMentions: { parse: [] },
+    });
+    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
+  } else if (event === "issues" && ["closed", "reopened"].includes(payload.action)) {
+    const issueNumber = payload.issue?.number as number | undefined;
+    if (!issueNumber) return;
+    const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
+    if (!linked) return;
+    const thread = await getThreadChannel(linked.thread_id);
+    if (!thread) throw new Error("Linked Discord thread " + linked.thread_id + " is unavailable");
+
+    if (payload.action === "closed") {
+      try {
+        await syncGitHubStatusLabel(issueNumber, "status: resolved");
+      } catch (error) {
+        log("error", "github.issue_status_label_sync_failed", {
+          issueNumber,
+          statusLabel: "status: resolved",
+          error: errorMessage(error),
+        });
+      }
+      setState.run("closed", linked.thread_id);
+      await applyTags(thread, [resolvedTag]);
+      await thread.setArchived(true, "Linked GitHub issue was closed");
+    } else {
+      try {
+        await syncGitHubStatusLabel(issueNumber, "status: triage");
+      } catch (error) {
+        log("error", "github.issue_status_label_sync_failed", {
+          issueNumber,
+          statusLabel: "status: triage",
+          error: errorMessage(error),
+        });
+      }
+      setState.run("approved", linked.thread_id);
+      await thread.setArchived(false, "Linked GitHub issue was reopened");
+      await applyTags(thread, [approvedTag]);
+
+      const marker = "<!-- kitawatch-bridge:github-issue-reopened:" + issueNumber + " -->";
+      const recentMessages = await thread.messages.fetch({ limit: 50 });
+      if (![...recentMessages.values()].some((message) => message.content.includes(marker))) {
+        await thread.send("The linked GitHub issue was reopened.\n" + marker);
+      }
+    }
+  }
+}
+
+async function processPendingWebhooks(): Promise<void> {
+  if (!client.isReady() || webhookWorkerRunning) return;
+  webhookWorkerRunning = true;
+  try {
+    while (client.isReady()) {
+      const deliveries = webhookQueue.claimDue(Date.now(), 10);
+      if (deliveries.length === 0) break;
+
+      await Promise.all(deliveries.map(async (delivery) => {
+        try {
+          await processWebhookEvent(delivery.event, delivery.payload);
+          webhookQueue.markProcessed(delivery.deliveryId);
+          log("info", "webhook.processed", {
+            deliveryId: delivery.deliveryId,
+            event: delivery.event,
+            attempts: delivery.attempts,
+          });
+        } catch (error) {
+          const message = errorMessage(error);
+          const nextAttemptAt = webhookQueue.markFailed(delivery.deliveryId, delivery.attempts, message);
+          log("error", "webhook.processing_failed", {
+            deliveryId: delivery.deliveryId,
+            event: delivery.event,
+            attempts: delivery.attempts,
+            nextAttemptAt: new Date(nextAttemptAt).toISOString(),
+            error: message,
+          });
+        }
+      }));
+    }
+  } finally {
+    webhookWorkerRunning = false;
+  }
+}
+
 const app = express();
 
 // Keep the expensive diagnostics endpoint from being used as an unlimited
@@ -587,11 +692,6 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
     res.status(401).send("Invalid signature");
     return;
   }
-  if (seenDelivery.get(deliveryId)) {
-    log("info", "webhook.duplicate", { deliveryId, event });
-    res.status(200).send("Duplicate delivery ignored");
-    return;
-  }
   let payload: any;
   try {
     payload = JSON.parse(req.body.toString("utf8"));
@@ -599,63 +699,22 @@ app.post("/webhooks/github", express.raw({ type: "application/json", limit: "1mb
     res.status(400).send("Invalid JSON");
     return;
   }
-  saveDelivery.run(deliveryId);
-  log("info", "webhook.accepted", { deliveryId, event, action: payload.action ?? null, issueNumber: payload.issue?.number ?? null });
-  res.status(202).send("Accepted");
 
-  try {
-    if (event === "issue_comment" && payload.action === "created") {
-      const issueNumber = payload.issue?.number as number | undefined;
-      const comment = payload.comment;
-      if (!issueNumber || !comment?.body || hasBridgeMarker(comment.body)) return;
-      const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
-      if (!linked || linked.state !== "approved") return;
-      const thread = await getThreadChannel(linked.thread_id);
-      if (!thread) return;
-      await thread.send({
-        content: `**GitHub — ${comment.user?.login ?? "user"}**\n\n${String(comment.body).slice(0, 1800)}\n\n[View GitHub comment](${comment.html_url})\n<!-- kitawatch-bridge:github -->`,
-        allowedMentions: { parse: [] },
-      });
-      log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
-    } else if (event === "issues" && ["closed", "reopened"].includes(payload.action)) {
-      const issueNumber = payload.issue?.number as number | undefined;
-      if (!issueNumber) return;
-      const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
-      if (!linked) return;
-      const thread = await getThreadChannel(linked.thread_id);
-      if (!thread) return;
-      if (payload.action === "closed") {
-        try {
-          await syncGitHubStatusLabel(issueNumber, "status: resolved");
-        } catch (error) {
-          log("error", "github.issue_status_label_sync_failed", {
-            issueNumber,
-            statusLabel: "status: resolved",
-            error: errorMessage(error),
-          });
-        }
-        setState.run("closed", linked.thread_id);
-        await applyTags(thread, [resolvedTag]);
-        await thread.setArchived(true, "Linked GitHub issue was closed");
-      } else {
-        try {
-          await syncGitHubStatusLabel(issueNumber, "status: triage");
-        } catch (error) {
-          log("error", "github.issue_status_label_sync_failed", {
-            issueNumber,
-            statusLabel: "status: triage",
-            error: errorMessage(error),
-          });
-        }
-        setState.run("approved", linked.thread_id);
-        await thread.setArchived(false, "Linked GitHub issue was reopened");
-        await applyTags(thread, [approvedTag]);
-        await thread.send("The linked GitHub issue was reopened.");
-      }
-    }
-  } catch (error) {
-    log("error", "webhook.processing_failed", { deliveryId, event, action: payload.action ?? null, error: errorMessage(error) });
+  const inserted = webhookQueue.enqueue(deliveryId, event, payload);
+  if (!inserted) {
+    log("info", "webhook.duplicate", { deliveryId, event });
+    res.status(200).send("Duplicate delivery ignored");
+    return;
   }
+
+  log("info", "webhook.queued", {
+    deliveryId,
+    event,
+    action: payload.action ?? null,
+    issueNumber: payload.issue?.number ?? null,
+  });
+  res.status(202).send("Queued for processing");
+  void processPendingWebhooks();
 });
 
 const port = Number(env.PORT ?? 3000);
