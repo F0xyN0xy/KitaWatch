@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
+import HCaptchaWidget from '@/components/HCaptchaWidget';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { ensureGuestSession } from '@/services/guestSession';
 
@@ -31,6 +32,8 @@ const PERIODS: { value: LeaderboardPeriod; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'all_time', label: 'All time' },
 ];
+
+const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY?.trim();
 
 function formatEpisodes(count: number) {
   return `${count} ${count === 1 ? 'episode' : 'episodes'}`;
@@ -67,11 +70,13 @@ export default function Leaderboard() {
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [needsCaptcha, setNeedsCaptcha] = useState(false);
+  const [captchaNotice, setCaptchaNotice] = useState<string | null>(null);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const loadLeaderboard = useCallback(async (showRefresh = false) => {
+  const loadLeaderboard = useCallback(async (showRefresh = false, captchaToken?: string) => {
     if (!isSupabaseConfigured || !supabase) {
       setError('Leaderboard is unavailable because Supabase is not configured in this build.');
       setLoading(false);
@@ -82,10 +87,16 @@ export default function Leaderboard() {
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setCaptchaNotice(null);
     setProfileError(null);
 
     try {
-      await ensureGuestSession();
+      const hasSession = await ensureGuestSession(captchaToken);
+      if (!hasSession) {
+        setNeedsCaptcha(true);
+        return;
+      }
+      setNeedsCaptcha(false);
 
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
@@ -268,6 +279,28 @@ export default function Leaderboard() {
             Try again
           </Button>
         </div>
+      ) : needsCaptcha ? (
+        <section className="rounded-xl border border-white/10 bg-ink-900 p-5">
+          <h3 className="font-semibold text-zinc-100">Create your guest account</h3>
+          <p className="mt-1 max-w-xl text-sm text-zinc-400">
+            Complete this one-time verification to create a private KitaWatch guest account. Your profile stays hidden from the leaderboard unless you opt in.
+          </p>
+          {hcaptchaSiteKey ? (
+            <div className="mt-4">
+              <HCaptchaWidget
+                sitekey={hcaptchaSiteKey}
+                onVerify={(token) => loadLeaderboard(false, token)}
+                onExpire={() => setCaptchaNotice('Verification expired. Please complete the challenge again.')}
+                onError={(message) => setError(message)}
+              />
+              {captchaNotice && <p className="mt-2 text-xs text-amber-300">{captchaNotice}</p>}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-amber-300">
+              CAPTCHA is not configured in this build. Set VITE_HCAPTCHA_SITE_KEY and rebuild KitaWatch.
+            </p>
+          )}
+        </section>
       ) : loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((item) => (
