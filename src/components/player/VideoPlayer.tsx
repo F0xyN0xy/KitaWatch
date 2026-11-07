@@ -99,6 +99,32 @@ export default function VideoPlayer(props: Props) {
   return <UnsupportedSource source={props.source} onFatal={props.onFatal} />;
 }
 
+/** Generate a UUID v4 in WebViews that expose getRandomValues but not randomUUID. */
+function createPlaybackUuid(): string {
+  const cryptoApi = globalThis.crypto;
+
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+
+  if (typeof cryptoApi?.getRandomValues !== 'function') {
+    throw new Error('Secure random number generation is unavailable in this environment.');
+  }
+
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
+  return [
+    hex.slice(0, 4).join(''),
+    hex.slice(4, 6).join(''),
+    hex.slice(6, 8).join(''),
+    hex.slice(8, 10).join(''),
+    hex.slice(10, 16).join(''),
+  ].join('-');
+}
+
 const FRAME_CLASS = 'relative w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10';
 
 async function openExternal(url: string) {
@@ -332,7 +358,7 @@ function MediaPlayer({
     } | null = null;
     let progressSyncInFlight = false;
     let lastProgressSyncAttemptAt = 0;
-    const playbackSessionId = crypto.randomUUID();
+    const playbackSessionId = createPlaybackUuid();
     let flushPlaybackProgress: (() => void) | null = null;
     // Listeners wired after art creation; cleaned up by the effect return.
     const disposers: (() => void)[] = [];
@@ -618,7 +644,7 @@ function MediaPlayer({
           if (delta < 1) return;
           pendingWatchedSeconds -= delta;
           pendingProgressBatch = {
-            clientEventId: crypto.randomUUID(),
+            clientEventId: createPlaybackUuid(),
             sessionId: playbackSessionId,
             animeId: Number(animeId),
             episodeNumber,
