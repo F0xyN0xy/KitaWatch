@@ -175,7 +175,7 @@ export default function Leaderboard() {
           </div>
           <h1 className="text-2xl font-bold text-white">Leaderboard</h1>
           <p className="mt-1 max-w-xl text-sm text-zinc-500">
-            See how the KitaWatch community is watching. Only accounts that opt in are listed.
+            See how the KitaWatch community is watching. Profiles appear by default, and you can hide yours anytime.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void loadLeaderboard(true)} disabled={loading || refreshing}>
@@ -193,7 +193,7 @@ export default function Leaderboard() {
             <div>
               <h2 className="font-semibold text-zinc-100">Leaderboard privacy</h2>
               <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-500">
-                Your profile is private on the leaderboard by default. Opting in shares your display name, avatar, episode count, and accumulated watch time.
+                Your profile appears on the public leaderboard by default. This shares your display name, avatar, episode count, and accumulated watch time. You can turn visibility off at any time.
               </p>
               <p className="mt-2 text-xs text-zinc-400">
                 {isAnonymous ? 'You are using a guest account.' : 'You are using your connected KitaWatch account.'}
@@ -283,7 +283,7 @@ export default function Leaderboard() {
         <section className="rounded-xl border border-white/10 bg-ink-900 p-5">
           <h3 className="font-semibold text-zinc-100">Create your guest account</h3>
           <p className="mt-1 max-w-xl text-sm text-zinc-400">
-            Complete this one-time verification to create a private KitaWatch guest account. Your profile stays hidden from the leaderboard unless you opt in.
+            Complete this one-time verification to create your KitaWatch guest account. Your profile will appear on the leaderboard by default, but you can turn visibility off at any time.
           </p>
           {hcaptchaSiteKey ? (
             <div className="mt-4">
@@ -313,8 +313,8 @@ export default function Leaderboard() {
           <h3 className="mt-3 font-semibold text-zinc-300">No rankings yet</h3>
           <p className="mt-1 max-w-md text-sm text-zinc-500">
             {metric === 'episodes'
-              ? 'No opted-in accounts have completed an episode during this period yet. Reach 80% of an episode to earn episode credit.'
-              : 'No opted-in accounts have recorded playback time during this period yet. Keep watching supported direct-media streams to build your total.'}
+              ? 'No visible accounts have completed an episode during this period yet. Reach 80% of an episode to earn episode credit.'
+              : 'No visible accounts have recorded playback time during this period yet. Keep watching supported direct-media streams to build your total.'}
           </p>
         </div>
       ) : (
