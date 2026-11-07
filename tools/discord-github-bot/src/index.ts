@@ -540,6 +540,7 @@ async function processWebhookEvent(event: string, payload: any): Promise<void> {
           statusLabel: "status: resolved",
           error: errorMessage(error),
         });
+        throw error;
       }
       setState.run("closed", linked.thread_id);
       await applyTags(thread, [resolvedTag]);
@@ -553,6 +554,7 @@ async function processWebhookEvent(event: string, payload: any): Promise<void> {
           statusLabel: "status: triage",
           error: errorMessage(error),
         });
+        throw error;
       }
       setState.run("approved", linked.thread_id);
       await thread.setArchived(false, "Linked GitHub issue was reopened");
