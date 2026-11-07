@@ -519,7 +519,7 @@ app.get("/health", (_req, res) => res.status(200).json({
 app.get("/diagnostics", diagnosticsRateLimiter, async (req, res) => {
   const diagnosticsToken = env.DIAGNOSTICS_TOKEN;
   if (!diagnosticsToken) return res.status(404).json({ error: "Not found" });
-  const provided = req.header("authorization")?.replace(/^Bearer\\s+/i, "") ?? "";
+  const provided = req.header("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   const a = Buffer.from(provided);
   const b = Buffer.from(diagnosticsToken);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: "Unauthorized" });
