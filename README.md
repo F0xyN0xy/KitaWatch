@@ -110,6 +110,30 @@ Shipping a release:
 npm run release:tag -- X.Y.Z   # bump, commit, tag, push -> CI builds + signs + publishes
 ```
 
+## Supabase guest accounts and CAPTCHA
+
+The leaderboard can create a private anonymous Supabase account for a device that
+does not already have a KitaWatch session. New guest-account creation is protected
+with hCaptcha; existing sessions do not need to solve a challenge again.
+
+To configure it:
+
+1. Create an hCaptcha site and copy its **Sitekey** and **Secret key**.
+2. In Supabase, enable anonymous sign-ins under Authentication sign-in providers.
+3. In Supabase, open **Authentication → Bot and Abuse Protection**, enable CAPTCHA,
+   choose **hCaptcha**, and enter the hCaptcha **Secret key**.
+4. Put the public Sitekey in the local build environment as
+   `VITE_HCAPTCHA_SITE_KEY=your_sitekey`.
+5. For local builds, put the Sitekey in the root `.env` file. For GitHub release builds, add a repository Actions variable named `VITE_HCAPTCHA_SITE_KEY` under **Settings → Secrets and variables → Actions → Variables**. Build KitaWatch again so Vite embeds the public Sitekey in the app.
+
+The hCaptcha Sitekey is public and may be included in the desktop build. The hCaptcha
+Secret key must stay in Supabase's dashboard; never add it to `.env`, frontend
+code, or GitHub. Keep hCaptcha domain allowlisting disabled initially unless the
+Tauri app's WebView origin and the website host are both correctly allowlisted.
+
+If `VITE_HCAPTCHA_SITE_KEY` is missing, the leaderboard explains that CAPTCHA
+is not configured instead of repeatedly attempting an anonymous sign-in.
+
 ## Contributing
 
 Issues and pull requests are welcome — see [LICENSE.md](./LICENSE.md)
