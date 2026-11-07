@@ -12,8 +12,9 @@ export default defineConfig({
   },
   // Tauri dev expects a fixed port
   server: {
-    port: 1420,
     host: true,
+    allowedHosts: ['kitawatch.free.nf'],
+    port: 1420,
     strictPort: true,
   },
   build: {
