@@ -140,7 +140,7 @@ export default function Sidebar() {
         </div>
         <Disclaimer />
         <p className="text-[10px] uppercase tracking-widest text-zinc-700">
-          v4.1.0
+          v4.2.0
         </p>
       </div>
     </aside>
