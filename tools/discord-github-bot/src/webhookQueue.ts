@@ -94,13 +94,12 @@ export function createWebhookQueue(db: Database.Database) {
   const enqueueTransaction = db.transaction((deliveryId: string, event: string, payload: unknown, now: number) => {
     const serialized = JSON.stringify(payload);
     if (serialized === undefined) throw new Error("Webhook payload could not be serialized");
-    insert.run(deliveryId, event, serialized, now);
-    return find.get(deliveryId) !== undefined;
+    return insert.run(deliveryId, event, serialized, now).changes === 1;
   });
 
   return {
     enqueue(deliveryId: string, event: string, payload: unknown, now = Date.now()): boolean {
-      return enqueueTransaction(deliveryId, event, payload, now).changes === 1;
+      return enqueueTransaction(deliveryId, event, payload, now);
     },
 
     claimDue(now = Date.now(), limit = 10): WebhookDelivery[] {
