@@ -13,23 +13,26 @@ let guestSessionPromise: Promise<boolean> | null = null;
  */
 export async function ensureGuestSession(captchaToken?: string): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return false;
+  if (guestSessionPromise) return guestSessionPromise;
 
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+
+  // Never replace an existing Discord/permanent account or guest session.
+  if (data.session) return true;
+
+  // Do not cache the "needs CAPTCHA" result. A later call with a fresh token
+  // must be allowed to create the guest session.
+  if (!captchaToken) return false;
+
+  // Another call may have started sign-in while this call was checking session.
   if (guestSessionPromise) return guestSessionPromise;
 
   guestSessionPromise = (async () => {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-
-    // Never replace an existing Discord/permanent account or guest session.
-    if (data.session) return true;
-
-    if (!captchaToken) return false;
-
     const { error: signInError } = await supabase.auth.signInAnonymously({
       options: { captchaToken },
     });
     if (signInError) throw signInError;
-
     return true;
   })();
 
