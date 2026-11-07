@@ -2,7 +2,7 @@ name: Discord GitHub Bot CI
 
 on:
   push:
-    branches: [main, "feat/discord-github-feedback-bot", "feat/discord-community-stats"]
+    branches: [main, "feat/discord-github-feedback-bot", "feat/discord-community-stats", "fix/webhook-delivery-retries"]
     paths:
       - "tools/discord-github-bot/**"
       - ".github/workflows/discord-bot.yml"
