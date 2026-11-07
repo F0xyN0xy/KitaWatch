@@ -124,7 +124,7 @@ To configure it:
    choose **hCaptcha**, and enter the hCaptcha **Secret key**.
 4. Put the public Sitekey in the local build environment as
    `VITE_HCAPTCHA_SITE_KEY=your_sitekey`.
-5. Build KitaWatch again so Vite embeds the public sitekey in the app.
+5. For local builds, put the Sitekey in the root `.env` file. For GitHub release builds, add a repository Actions variable named `VITE_HCAPTCHA_SITE_KEY` under **Settings → Secrets and variables → Actions → Variables**. Build KitaWatch again so Vite embeds the public Sitekey in the app.
 
 The hCaptcha Sitekey is public and may be included in the desktop build. The hCaptcha
 Secret key must stay in Supabase's dashboard; never add it to `.env`, frontend
