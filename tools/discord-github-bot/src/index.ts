@@ -533,8 +533,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     try {
       await thread.send({
-        content: "**GitHub — " + (comment.user?.login ?? "user") + "**\\n\\n" +
-          String(comment.body).slice(0, 1800) + "\\n\\n[View GitHub comment](" + comment.html_url + ")",
+        content: "**GitHub — " + (comment.user?.login ?? "user") + "**\n\n" +
+          String(comment.body).slice(0, 1800) + "\n\n[View GitHub comment](" + comment.html_url + ")",
         allowedMentions: { parse: [] },
       });
     } catch (error) {
