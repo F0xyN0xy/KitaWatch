@@ -543,7 +543,7 @@ export default function Watch({ id, episode }: WatchProps) {
                 </span>
               </h2>
               <p className="mt-1 text-xs text-zinc-600">
-                Choose a source, then press Remember to prefer it for future {audio.toUpperCase()} episodes.
+                Choose a source, then press Remember to prefer its provider for future {audio.toUpperCase()} episodes. Press Preferred again to clear it.
               </p>
             </div>
             {dead.length > 0 && (
