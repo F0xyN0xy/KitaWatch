@@ -95,6 +95,35 @@ db.exec(`
   );
 `);
 initializeWebhookQueue(db);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mirrored_github_comments (
+    comment_id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('sending', 'sent')),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+const claimMirroredGitHubComment = db.prepare(`
+  INSERT INTO mirrored_github_comments (comment_id, thread_id, status, updated_at)
+  VALUES (?, ?, 'sending', CURRENT_TIMESTAMP)
+  ON CONFLICT(comment_id) DO UPDATE SET
+    thread_id = excluded.thread_id,
+    status = 'sending',
+    updated_at = CURRENT_TIMESTAMP
+  WHERE mirrored_github_comments.status = 'sending'
+    AND mirrored_github_comments.updated_at < datetime('now', '-5 minutes')
+`);
+const markMirroredGitHubCommentSent = db.prepare(`
+  INSERT INTO mirrored_github_comments (comment_id, thread_id, status, updated_at)
+  VALUES (?, ?, 'sent', CURRENT_TIMESTAMP)
+  ON CONFLICT(comment_id) DO UPDATE SET
+    thread_id = excluded.thread_id,
+    status = 'sent',
+    updated_at = CURRENT_TIMESTAMP
+`);
+const releaseMirroredGitHubComment = db.prepare(
+  "DELETE FROM mirrored_github_comments WHERE comment_id = ? AND status = 'sending'",
+);
 const webhookQueue = createWebhookQueue(db);
 const getThread = db.prepare("SELECT * FROM feedback_threads WHERE thread_id = ?");
 const addThread = db.prepare(
@@ -487,24 +516,34 @@ client.on(Events.MessageCreate, async (message: Message) => {
     "",
     "<!-- kitawatch-bridge:discord -->",
   ].join("\n");
-  try {
-    await githubApi(`/issues/${row.issue_number}/comments`, {
-      method: "POST",
-      body: JSON.stringify({ body }),
-    });
-    log("info", "comment.discord_to_github", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id });
-  } catch (error) {
-    log("error", "comment.discord_to_github_failed", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id, error: errorMessage(error) });
-  }
-});
+  try {    const commentId = String(comment.id);
+    const legacyMarker = "<!-- kitawatch-bridge:github-comment:" + commentId + " -->";
+    const recentMessages = await thread.messages.fetch({ limit: 50 });
+    if ([...recentMessages.values()].some((message) => message.content.includes(legacyMarker))) {
+      markMirroredGitHubCommentSent.run(commentId, linked.thread_id);
+      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId });
+      return;
+    }
 
-let webhookWorkerRunning = false;
+    const claim = claimMirroredGitHubComment.run(commentId, linked.thread_id);
+    if (claim.changes === 0) {
+      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId });
+      return;
+    }
 
-async function processWebhookEvent(event: string, payload: any): Promise<void> {
-  if (event === "issue_comment" && payload.action === "created") {
-    const issueNumber = payload.issue?.number as number | undefined;
-    const comment = payload.comment;
-    if (!issueNumber || !comment?.body || hasBridgeMarker(comment.body)) return;
+    try {
+      await thread.send({
+        content: "**GitHub — " + (comment.user?.login ?? "user") + "**\\n\\n" +
+          String(comment.body).slice(0, 1800) + "\\n\\n[View GitHub comment](" + comment.html_url + ")",
+        allowedMentions: { parse: [] },
+      });
+    } catch (error) {
+      releaseMirroredGitHubComment.run(commentId);
+      throw error;
+    }
+
+    markMirroredGitHubCommentSent.run(commentId, linked.thread_id);
+    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId });umber || !comment?.body || hasBridgeMarker(comment.body)) return;
     const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
     if (!linked || linked.state !== "approved") return;
     const thread = await getThreadChannel(linked.thread_id);
