@@ -274,12 +274,29 @@ export default function Watch({ id, episode }: WatchProps) {
             type="button"
             onClick={() => {
               const current = useSettingsStore.getState();
-              if (audio === 'dub') current.setPreferredDubProvider(providerKey);
-              else current.setPreferredSubProvider(providerKey);
+              // A preferred provider is a toggle: clicking it again restores
+              // automatic provider ordering for this audio mode.
+              if (audio === 'dub') {
+                current.setPreferredDubProvider(
+                  isPreferred ? '' : providerKey,
+                );
+              } else {
+                current.setPreferredSubProvider(
+                  isPreferred ? '' : providerKey,
+                );
+              }
               setActiveKey(key);
             }}
-            title={isPreferred ? `Preferred ${audio.toUpperCase()} provider` : `Remember for ${audio.toUpperCase()}`}
-            aria-label={isPreferred ? `Preferred ${audio.toUpperCase()} provider: ${s.server}` : `Remember ${s.server} for ${audio.toUpperCase()}`}
+            title={
+              isPreferred
+                ? `Remove preferred ${audio.toUpperCase()} provider`
+                : `Remember for ${audio.toUpperCase()}`
+            }
+            aria-label={
+              isPreferred
+                ? `Remove preferred ${audio.toUpperCase()} provider: ${s.server}`
+                : `Remember ${s.server} for ${audio.toUpperCase()}`
+            }
             className={`rounded-full px-2 py-1.5 text-[10px] ring-1 transition ${
               isPreferred
                 ? 'bg-accent-600/20 text-accent-300 ring-accent-500/40'
