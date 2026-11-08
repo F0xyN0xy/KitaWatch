@@ -5,7 +5,7 @@
   "identifier": "com.kitawatch.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://kitawatch.free.nf:1420",
+    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
