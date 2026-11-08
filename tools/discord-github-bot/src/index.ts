@@ -95,6 +95,35 @@ db.exec(`
   );
 `);
 initializeWebhookQueue(db);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mirrored_github_comments (
+    comment_id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('sending', 'sent')),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+const claimMirroredGitHubComment = db.prepare(`
+  INSERT INTO mirrored_github_comments (comment_id, thread_id, status, updated_at)
+  VALUES (?, ?, 'sending', CURRENT_TIMESTAMP)
+  ON CONFLICT(comment_id) DO UPDATE SET
+    thread_id = excluded.thread_id,
+    status = 'sending',
+    updated_at = CURRENT_TIMESTAMP
+  WHERE mirrored_github_comments.status = 'sending'
+    AND mirrored_github_comments.updated_at < datetime('now', '-5 minutes')
+`);
+const markMirroredGitHubCommentSent = db.prepare(`
+  INSERT INTO mirrored_github_comments (comment_id, thread_id, status, updated_at)
+  VALUES (?, ?, 'sent', CURRENT_TIMESTAMP)
+  ON CONFLICT(comment_id) DO UPDATE SET
+    thread_id = excluded.thread_id,
+    status = 'sent',
+    updated_at = CURRENT_TIMESTAMP
+`);
+const releaseMirroredGitHubComment = db.prepare(
+  "DELETE FROM mirrored_github_comments WHERE comment_id = ? AND status = 'sending'",
+);
 const webhookQueue = createWebhookQueue(db);
 const getThread = db.prepare("SELECT * FROM feedback_threads WHERE thread_id = ?");
 const addThread = db.prepare(
@@ -510,19 +539,34 @@ async function processWebhookEvent(event: string, payload: any): Promise<void> {
     const thread = await getThreadChannel(linked.thread_id);
     if (!thread) throw new Error("Linked Discord thread " + linked.thread_id + " is unavailable");
 
-    const marker = "<!-- kitawatch-bridge:github-comment:" + comment.id + " -->";
+    const commentId = String(comment.id);
+    const legacyMarker = "<!-- kitawatch-bridge:github-comment:" + commentId + " -->";
     const recentMessages = await thread.messages.fetch({ limit: 50 });
-    if ([...recentMessages.values()].some((message) => message.content.includes(marker))) {
-      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
+    if ([...recentMessages.values()].some((message) => message.content.includes(legacyMarker))) {
+      markMirroredGitHubCommentSent.run(commentId, linked.thread_id);
+      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId });
       return;
     }
 
-    await thread.send({
-      content: "**GitHub — " + (comment.user?.login ?? "user") + "**\n\n" +
-        String(comment.body).slice(0, 1800) + "\n\n[View GitHub comment](" + comment.html_url + ")\n" + marker,
-      allowedMentions: { parse: [] },
-    });
-    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
+    const claim = claimMirroredGitHubComment.run(commentId, linked.thread_id);
+    if (claim.changes === 0) {
+      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId });
+      return;
+    }
+
+    try {
+      await thread.send({
+        content: "**GitHub — " + (comment.user?.login ?? "user") + "**\n\n" +
+          String(comment.body).slice(0, 1800) + "\n\n[View GitHub comment](" + comment.html_url + ")",
+        allowedMentions: { parse: [] },
+      });
+    } catch (error) {
+      releaseMirroredGitHubComment.run(commentId);
+      throw error;
+    }
+
+    markMirroredGitHubCommentSent.run(commentId, linked.thread_id);
+    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId });
   } else if (event === "issues" && ["closed", "reopened"].includes(payload.action)) {
     const issueNumber = payload.issue?.number as number | undefined;
     if (!issueNumber) return;
