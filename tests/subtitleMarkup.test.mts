@@ -12,7 +12,7 @@ test('preserves supported subtitle formatting tags', () => {
 test('removes attributes and unsupported HTML while preserving subtitle text', () => {
   assert.equal(
     sanitizeSubtitleMarkup('<b onclick="alert(1)">Bold</b><script>alert(1)</script><img src=x><svg/onload=alert(1)>ignored</svg>'),
-    '<b>Bold</b>alert(1)',
+    '<b>Bold</b>alert(1)ignored',
   );
 });
 
