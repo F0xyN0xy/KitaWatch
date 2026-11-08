@@ -14,6 +14,7 @@ import { recordPlaybackProgress } from '@/services/watchEvents';
 import { getForwardPlaybackDelta } from '@/services/watchTime';
 import { peekAnimeInfo } from '@/services/info';
 import { classifySourceKind, isDirectMedia, subtitleFormat } from '@/services/sourceType';
+import { sanitizeSubtitleMarkup } from '@/services/subtitleMarkup';
 
 /* ASS subtitles via JASSub (libass WASM), loaded from CDN only when needed. */
 const JASSUB_BASE = 'https://cdn.jsdelivr.net/npm/jassub@1/dist/';
@@ -386,9 +387,10 @@ function MediaPlayer({
           try {
             const res = await fetch(candidate);
             if (res.ok) {
-              const blob = await res.blob();
+              const safeText = sanitizeSubtitleMarkup(await res.text());
               if (cancelled) return;
-              subBlobUrl = URL.createObjectURL(blob);
+              const blobType = subType === 'srt' ? 'application/x-subrip' : 'text/vtt';
+              subBlobUrl = URL.createObjectURL(new Blob([safeText], { type: blobType }));
               break;
             }
           } catch {
@@ -434,6 +436,8 @@ function MediaPlayer({
                 url: subBlobUrl,
                 type: (subType === 'srt' ? 'srt' : 'vtt') as 'srt' | 'vtt',
                 encoding: 'utf-8' as const,
+                // Formatting tags are allowed only after provider markup is sanitized.
+                escape: false,
                 style: {
                   color: '#fff',
                   fontSize: '24px',
@@ -801,12 +805,14 @@ function MediaPlayer({
         try {
           const response = await fetch(candidate);
           if (!response.ok) continue;
-          const blob = await response.blob();
+          const safeText = sanitizeSubtitleMarkup(await response.text());
           if (cancelled) return;
-          blobUrl = URL.createObjectURL(blob);
+          const blobType = type === 'srt' ? 'application/x-subrip' : 'text/vtt';
+          blobUrl = URL.createObjectURL(new Blob([safeText], { type: blobType }));
           art.subtitle.switch(blobUrl, {
             type: type === 'srt' ? 'srt' : 'vtt',
             name: track.lang || `Subtitle ${selectedSubtitleIndex + 1}`,
+            escape: false,
           });
           art.subtitle.show = useSettingsStore.getState().subtitleEnabled;
           setSubtitleNotice('');
