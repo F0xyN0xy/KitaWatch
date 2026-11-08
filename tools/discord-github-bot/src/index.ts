@@ -516,7 +516,30 @@ client.on(Events.MessageCreate, async (message: Message) => {
     "",
     "<!-- kitawatch-bridge:discord -->",
   ].join("\n");
-  try {    const commentId = String(comment.id);
+  try {
+    await githubApi(`/issues/${row.issue_number}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+    log("info", "comment.discord_to_github", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id });
+  } catch (error) {
+    log("error", "comment.discord_to_github_failed", { threadId: message.channel.id, issueNumber: row.issue_number, messageId: message.id, error: errorMessage(error) });
+  }
+});
+
+let webhookWorkerRunning = false;
+
+async function processWebhookEvent(event: string, payload: any): Promise<void> {
+  if (event === "issue_comment" && payload.action === "created") {
+    const issueNumber = payload.issue?.number as number | undefined;
+    const comment = payload.comment;
+    if (!issueNumber || !comment?.body || hasBridgeMarker(comment.body)) return;
+    const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
+    if (!linked || linked.state !== "approved") return;
+    const thread = await getThreadChannel(linked.thread_id);
+    if (!thread) throw new Error("Linked Discord thread " + linked.thread_id + " is unavailable");
+
+    const commentId = String(comment.id);
     const legacyMarker = "<!-- kitawatch-bridge:github-comment:" + commentId + " -->";
     const recentMessages = await thread.messages.fetch({ limit: 50 });
     if ([...recentMessages.values()].some((message) => message.content.includes(legacyMarker))) {
@@ -543,25 +566,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     }
 
     markMirroredGitHubCommentSent.run(commentId, linked.thread_id);
-    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId });umber || !comment?.body || hasBridgeMarker(comment.body)) return;
-    const linked = getByIssue.get(issueNumber) as { thread_id: string; state: string } | undefined;
-    if (!linked || linked.state !== "approved") return;
-    const thread = await getThreadChannel(linked.thread_id);
-    if (!thread) throw new Error("Linked Discord thread " + linked.thread_id + " is unavailable");
-
-    const marker = "<!-- kitawatch-bridge:github-comment:" + comment.id + " -->";
-    const recentMessages = await thread.messages.fetch({ limit: 50 });
-    if ([...recentMessages.values()].some((message) => message.content.includes(marker))) {
-      log("info", "webhook.discord_comment_already_mirrored", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
-      return;
-    }
-
-    await thread.send({
-      content: "**GitHub — " + (comment.user?.login ?? "user") + "**\n\n" +
-        String(comment.body).slice(0, 1800) + "\n\n[View GitHub comment](" + comment.html_url + ")\n" + marker,
-      allowedMentions: { parse: [] },
-    });
-    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId: comment.id });
+    log("info", "comment.github_to_discord", { issueNumber, threadId: linked.thread_id, commentId });
   } else if (event === "issues" && ["closed", "reopened"].includes(payload.action)) {
     const issueNumber = payload.issue?.number as number | undefined;
     if (!issueNumber) return;
