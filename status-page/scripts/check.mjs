@@ -54,7 +54,7 @@ const incidents = Array.isArray(previous.incidents) ? [...previous.incidents] : 
 for (const service of services) {
   const before = previous.current?.[service.id]?.status || 'unknown';
   const after = current[service.id].status;
-  if (before === 'operational' && after !== 'operational') {
+  if ((before === 'operational' || before === 'unknown') && after !== 'operational') {
     incidents.unshift({
       id: service.id + '-' + Date.now(),
       serviceId: service.id,
