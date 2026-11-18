@@ -52,11 +52,11 @@ jobs:
           VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
         run: |
           # Vite reads this file when building the frontend.
-          printf 'VITE_SUPABASE_URL=%s\\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\\nVITE_HCAPTCHA_SITE_KEY=%s\\n' \\
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_HCAPTCHA_SITE_KEY=%s\n' \
             "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" "$VITE_HCAPTCHA_SITE_KEY" > .env
 
           # Rust-side configuration.
-          printf 'ANILIST_CLIENT_ID=%s\\nANILIST_CLIENT_SECRET=%s\\nANILIST_REDIRECT_URI=https://kitawatch.free.nf/?oauth_callback=anilist\\n' \\
+          printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=https://kitawatch.free.nf/?oauth_callback=anilist\n' \
             "$ANILIST_CLIENT_ID" "$ANILIST_CLIENT_SECRET" > src-tauri/.env
 
       - name: Install Anivexa deps
@@ -91,11 +91,11 @@ jobs:
 
           previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
           if [ -n "$previous_tag" ]; then
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \\
-              -f tag_name="$RELEASE_TAG" \\
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
               -f previous_tag_name="$previous_tag" --jq .body)"
           else
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \\
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
               -f tag_name="$RELEASE_TAG" --jq .body)"
           fi
 
