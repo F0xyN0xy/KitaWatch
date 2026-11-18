@@ -2,7 +2,7 @@
 
 # KitaWatch
 
-**A cross-platform desktop anime streaming client — local-first, no central server, automatic updates.**
+**A cross-platform desktop anime streaming client with hosted metadata APIs, a local playback proxy, and automatic updates.**
 
 [![Release](https://img.shields.io/github/v/release/F0xyN0xy/KitaWatch?style=for-the-badge)](https://github.com/F0xyN0xy/KitaWatch/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/F0xyN0xy/KitaWatch/total?style=for-the-badge)](https://github.com/F0xyN0xy/KitaWatch/releases)
@@ -52,8 +52,7 @@ Download the latest installer from
 | Windows | `KitaWatch_*_x64-setup.exe` (or `.msi`) |
 | Linux | `.deb`, `.rpm`, or `.AppImage` |
 
-Everything is bundled — **no Python, Node, or configuration needed**. The app
-spawns its own local backends on first launch (give it ~15 seconds).
+Everything needed for the desktop runtime is bundled — **no Python, Node, or configuration needed**. The app starts its local playback proxy and currently retained compatibility sidecars on first launch. Metadata and provider requests also use hosted KitaWatch services, so an internet connection is required.
 
 **Updates are automatic**: the app checks GitHub Releases on launch and offers
 one-click, cryptographically signed updates.
@@ -77,18 +76,27 @@ one-click, cryptographically signed updates.
 ## Architecture
 
 ```
-React 19 + TypeScript + Vite + Tailwind v4      (UI, lazy routes)
+React 19 + TypeScript + Vite + Tailwind v4
         │
-        ├─► kitawatch-kuhi-api   (Python 3.12, :8000)  search · metadata · extraction
-        ├─► kitawatch-proxy      (Python 3.12, :8001)  CORS relay · referer spoof · m3u8 rewrite · OAuth
-        └─► kitawatch-anivexa    (Node,        :4000)  15-provider aggregator
+        ├─► Hosted KitaWatch API       catalogue · metadata · extraction
+        ├─► Hosted Anivexa API         15-provider episode and stream lookup
+        └─► Local playback proxy      CORS relay · referer handling · HLS rewriting
 ```
 
-`api/anivexa/` contains the tracked Anivexa source. The Kuhi API source is fetched
-into the git-ignored `api/anime-api/` directory by `npm run setup:api`, while the
-playback proxy lives separately in `proxy/`. The three local services are built
-as standalone binaries and bundled with the desktop app; each installation runs
-its own local instances. Shell: Tauri v2 (Rust). Updates: minisign-signed.
+The frontend uses the hosted KitaWatch API for catalogue and extraction requests
+and the separately hosted Anivexa service for Anivexa provider requests. The
+local playback proxy remains part of desktop playback for CORS, referer handling,
+and HLS playlist/segment forwarding.
+
+The desktop app still builds and starts local Kuhi and Anivexa compatibility
+sidecars, in addition to the playback proxy. They are retained in the current
+bundle and startup lifecycle; this release does **not** remove those processes.
+Their eventual removal needs a separate migration and runtime verification.
+
+The Kuhi source is fetched into the git-ignored `api/anime-api/` directory by
+`npm run setup:api`; tracked Anivexa sources live in `api/anivexa/`, and the
+playback proxy source lives in `proxy/`. Shell: Tauri v2 (Rust). Updates:
+minisign-signed.
 
 ## Building from source
 
