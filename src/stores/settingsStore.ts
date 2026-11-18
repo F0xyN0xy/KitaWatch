@@ -210,9 +210,8 @@ export const useSettingsStore = create<SettingsState>()(
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
-          // v1 persisted whatever the build-time defaults were — including
-          // the dead hosted-API URLs from old releases. Force loopback.
-          if (!isLoopbackUrl(s.anivexaBaseUrl)) s.anivexaBaseUrl = 'http://localhost:4000';
+          // The playback proxy is a local sidecar and must use loopback.
+          // Anivexa is migrated separately below to its hosted endpoint.
           if (!isLoopbackUrl(s.proxyBaseUrl)) s.proxyBaseUrl = 'http://localhost:8001';
         }
         if (version < 3) {
