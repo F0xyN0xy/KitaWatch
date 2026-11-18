@@ -42,12 +42,14 @@ function render(data) {
   }).join('');
 
   const metrics = [
-    ['24 hours', 24],
-    ['7 days', 24 * 7],
-    ['30 days', 24 * 30],
+    ['24h', 24],
+    ['7d', 24 * 7],
+    ['30d', 24 * 30],
   ];
-  document.querySelector('#uptime').innerHTML = metrics.map(([label, hours]) =>
-    `<div class="uptime-card"><span>${label}</span><strong>${uptime(data.history, 'api', hours)}</strong></div>`
+  document.querySelector('#uptime').innerHTML = services.map((service) =>
+    `<div class="uptime-card"><span>${esc(service.name)}</span><div class="periods">${metrics.map(([label, hours]) =>
+      `<div><small>${label}</small><strong>${uptime(data.history, service.id, hours)}</strong></div>`
+    ).join('')}</div></div>`
   ).join('');
 
   const incidents = (data.incidents || []).slice(0, 12);
