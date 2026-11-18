@@ -160,7 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
       consumetBaseUrl: import.meta.env.VITE_CONSUMET_BASE_URL ?? 'http://localhost:3000',
       enableConsumetFallback: false,
       proxyBaseUrl: sidecarDefault(import.meta.env.VITE_PROXY_BASE_URL, 'http://localhost:8001'),
-      anivexaBaseUrl: (import.meta.env.VITE_ANIVEXA_BASE_URL as string | undefined)?.trim().replace(/\\/+$/, '') || 'https://kitawatch-anivexa-yya5k.faable.link',
+      anivexaBaseUrl: (import.meta.env.VITE_ANIVEXA_BASE_URL as string | undefined)?.trim().replace(/\/+$/, '') || 'https://kitawatch-anivexa-yya5k.faable.link',
       enableAnivexa: true,
       rememberFullscreen: true,
       lastFullscreen: false,
