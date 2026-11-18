@@ -12,8 +12,10 @@ import type {
   SpotlightAnime,
 } from '@/types';
 
-/** The app always talks to its own bundled sidecars. */
-const API_BASE_URL = 'http://127.0.0.1:8000';
+/** Hosted KitaWatch API. Override at build time for local development. */
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL as string | undefined
+)?.trim().replace(/\\/+$/, '') || 'https://api.kitawatch.free.nf';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 
@@ -189,6 +191,7 @@ interface RawEpisode {
 }
 
 interface EpisodesEnvelope {
+  /** Unified API and legacy Kuhi responses both expose provider payloads here. */
   providers?: Record<
     string,
     {
@@ -313,7 +316,7 @@ const jikanEpisodePageCache = new Map<string, Promise<EpisodeSummary[]>>();
 function providerEpisodesFor(id: number): Promise<EpisodeSummary[]> {
   const cached = providerEpisodeCache.get(id);
   if (cached) return cached;
-  const pending = request<unknown>(`/anime/episodes/${id}`)
+  const pending = request<unknown>(`/episodes/unified/${id}`)
     .then(adaptEpisodes)
     .catch((error) => {
       providerEpisodeCache.delete(id);
