@@ -26,7 +26,7 @@ async function check(url, validate = () => true) {
 const services = [
   { id: 'api', name: 'KitaWatch API', description: 'Core API health and unified provider routing.' },
   { id: 'kuhi', name: 'Kuhi adapter', description: 'Kuhi adapter registration and configuration in the hosted KitaWatch API.' },
-  { id: 'anivexa', name: 'Anivexa', description: 'Hosted Anivexa API process health.' },
+  { id: 'anivexa', name: 'Anivexa', description: 'Hosted Anivexa API reachability and valid JSON response.' },
 ];
 
 const apiHealth = await check(API_BASE + '/health', (body) => body?.status === 'healthy');
@@ -35,8 +35,13 @@ const apiHealth = await check(API_BASE + '/health', (body) => body?.status === '
 // using them here caused false outages when provider extraction exceeded 12 seconds.
 const kuhi = await check(API_BASE + '/providers/unified/status', (body) =>
   body?.adapters?.kuhi?.registered === true && body?.adapters?.kuhi?.configured === true);
+// The hosted root route is the Anivexa process's lightweight liveness response.
+// Do not couple this check to its informational JSON field names: those can change
+// independently of whether the API process is healthy. A non-error JSON object
+// plus HTTP 200 is enough for this process-level check; provider extraction is
+// intentionally not tested by the status page.
 const anivexa = await check(ANIVEXA_BASE + '/', (body) =>
-  typeof body?.name === 'string' && body.name.startsWith('Anivexa API') && Array.isArray(body.providers));
+  body !== null && typeof body === 'object' && !Array.isArray(body) && !('error' in body));
 
 const current = { api: apiHealth, kuhi, anivexa };
 const states = Object.values(current).map((item) => item.status);
