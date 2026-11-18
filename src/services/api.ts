@@ -517,11 +517,11 @@ export const api = {
 
   // Streaming
   extract: (query: number | string, episode: number, audio: AudioType = 'sub') =>
-    request<ExtractResponse>(`/anime/extract/${encodeURIComponent(String(query))}`, {
+    request<ExtractResponse>(`/extract/${encodeURIComponent(String(query))}`, {
       e: episode,
       type: audio,
     }),
-  providersStatus: () => request<ProviderStatus>('/anime/providers/status'),
+  providersStatus: () => request<ProviderStatus>('/providers/status'),
 };
 
 /** Proxy helpers for m3u8 playlists and segments (local sidecar). */
