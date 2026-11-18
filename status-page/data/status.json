@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-18T19:17:36.163Z",
+  "generatedAt": "2026-11-18T19:43:17.759Z",
   "overall": "degraded",
   "services": [
     {
@@ -9,30 +9,30 @@
     },
     {
       "id": "kuhi",
-      "name": "Kuhi catalogue",
-      "description": "Kuhi episode catalogue adapter through the unified API."
+      "name": "Kuhi adapter",
+      "description": "Kuhi adapter registration and configuration in the hosted KitaWatch API."
     },
     {
       "id": "anivexa",
       "name": "Anivexa",
-      "description": "Hosted Anivexa episode catalogue service."
+      "description": "Hosted Anivexa API process health."
     }
   ],
   "current": {
     "api": {
       "status": "operational",
-      "latencyMs": 1225,
+      "latencyMs": 1408,
       "httpStatus": 200
     },
     "kuhi": {
-      "status": "outage",
-      "latencyMs": 12002,
-      "httpStatus": null
+      "status": "operational",
+      "latencyMs": 594,
+      "httpStatus": 200
     },
     "anivexa": {
-      "status": "outage",
-      "latencyMs": 12001,
-      "httpStatus": null
+      "status": "degraded",
+      "latencyMs": 698,
+      "httpStatus": 200
     }
   },
   "history": [
@@ -55,6 +55,26 @@
           "httpStatus": null
         }
       }
+    },
+    {
+      "timestamp": "2026-11-18T19:43:17.759Z",
+      "services": {
+        "api": {
+          "status": "operational",
+          "latencyMs": 1408,
+          "httpStatus": 200
+        },
+        "kuhi": {
+          "status": "operational",
+          "latencyMs": 594,
+          "httpStatus": 200
+        },
+        "anivexa": {
+          "status": "degraded",
+          "latencyMs": 698,
+          "httpStatus": 200
+        }
+      }
     }
   ],
   "incidents": [
@@ -72,7 +92,7 @@
       "title": "Kuhi catalogue is experiencing issues",
       "description": "The automated health check detected a service disruption or incomplete response.",
       "startedAt": "2026-11-18T19:17:36.163Z",
-      "resolvedAt": null
+      "resolvedAt": "2026-11-18T19:43:17.759Z"
     }
   ]
 }
