@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/F0xyN0xy/KitaWatch?style=for-the-badge&logo=github)](https://github.com/F0xyN0xy/KitaWatch/graphs/contributors)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![React](https://img.shields.io/badge/React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
@@ -77,16 +77,18 @@ one-click, cryptographically signed updates.
 ## Architecture
 
 ```
-React 18 + TypeScript + Vite + Tailwind v4      (UI, lazy routes)
+React 19 + TypeScript + Vite + Tailwind v4      (UI, lazy routes)
         │
         ├─► kitawatch-kuhi-api   (Python 3.12, :8000)  search · metadata · extraction
         ├─► kitawatch-proxy      (Python 3.12, :8001)  CORS relay · referer spoof · m3u8 rewrite · OAuth
         └─► kitawatch-anivexa    (Node,        :4000)  15-provider aggregator
 ```
 
-All three backends are vendored in [`api/`](./api) and bundled as standalone
-binaries — every user runs their own instance locally. There is no central
-server. Shell: Tauri v2 (Rust). Updates: minisign-signed.
+`api/anivexa/` contains the tracked Anivexa source. The Kuhi API source is fetched
+into the git-ignored `api/anime-api/` directory by `npm run setup:api`, while the
+playback proxy lives separately in `proxy/`. The three local services are built
+as standalone binaries and bundled with the desktop app; each installation runs
+its own local instances. Shell: Tauri v2 (Rust). Updates: minisign-signed.
 
 ## Building from source
 
