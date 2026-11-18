@@ -68,10 +68,11 @@ async function get<T>(path: string): Promise<T> {
     }
   }
 
-  // A 4xx/5xx from the local sidecar is the actual provider error. Proxying
-  // localhost:4000 through localhost:8001 only repeats the same failure and
-  // hides the useful response body, so preserve it for the resolver/UI.
-  if (direct && !direct.ok && localSidecarUrl(url)) {
+  // Any HTTP response means the upstream was reached. Preserve its
+  // status and response body instead of issuing the same request again
+  // through the local proxy. The proxy remains a fallback for network/CORS
+  // failures where fetch produced no HTTP response.
+  if (direct && !direct.ok) {
     const detail = await responseError(direct);
     throw new Error(
       `Anivexa HTTP ${direct.status} for ${path}${detail ? `: ${detail}` : ''}`,
