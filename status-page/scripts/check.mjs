@@ -2,7 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const API_BASE = (process.env.KITAWATCH_API_URL || 'https://api.kitawatch.free.nf').replace(/\/+$/, '');
 const ANIVEXA_BASE = (process.env.ANIVEXA_BASE_URL || 'https://kitawatch-anivexa-yya5k.faable.link').replace(/\/+$/, '');
-const SAMPLE_ANILIST_ID = '154587';
 const TIMEOUT_MS = 12_000;
 const DATA_PATH = new URL('../data/status.json', import.meta.url);
 
@@ -26,16 +25,18 @@ async function check(url, validate = () => true) {
 
 const services = [
   { id: 'api', name: 'KitaWatch API', description: 'Core API health and unified provider routing.' },
-  { id: 'kuhi', name: 'Kuhi catalogue', description: 'Kuhi episode catalogue adapter through the unified API.' },
-  { id: 'anivexa', name: 'Anivexa', description: 'Hosted Anivexa episode catalogue service.' },
+  { id: 'kuhi', name: 'Kuhi adapter', description: 'Kuhi adapter registration and configuration in the hosted KitaWatch API.' },
+  { id: 'anivexa', name: 'Anivexa', description: 'Hosted Anivexa API process health.' },
 ];
 
 const apiHealth = await check(API_BASE + '/health', (body) => body?.status === 'healthy');
-const kuhi = await check(API_BASE + '/episodes/unified/' + SAMPLE_ANILIST_ID, (body) =>
-  body?.source === 'unified' && body?.adapters?.kuhi?.available === true);
-const anivexa = await check(ANIVEXA_BASE + '/episodes/' + SAMPLE_ANILIST_ID, (body) =>
-  body && typeof body === 'object' && Object.keys(body).some((key) =>
-    !['page', 'type', 'mappings', 'meta', 'metadata', 'error'].includes(key) && body[key] && typeof body[key] === 'object'));
+// These are deliberately lightweight liveness/configuration probes. The episode
+// endpoints fan out to external scrapers and can take longer than a health check;
+// using them here caused false outages when provider extraction exceeded 12 seconds.
+const kuhi = await check(API_BASE + '/providers/unified/status', (body) =>
+  body?.adapters?.kuhi?.registered === true && body?.adapters?.kuhi?.configured === true);
+const anivexa = await check(ANIVEXA_BASE + '/', (body) =>
+  typeof body?.name === 'string' && body.name.startsWith('Anivexa API') && Array.isArray(body.providers));
 
 const current = { api: apiHealth, kuhi, anivexa };
 const states = Object.values(current).map((item) => item.status);
