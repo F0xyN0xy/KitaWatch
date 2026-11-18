@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0b12">
+  <meta name="theme-color" content="#101214">
   <meta name="description" content="Live service health and uptime for KitaWatch.">
   <title>KitaWatch Status</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
@@ -21,9 +21,9 @@
 
     <main>
       <section class="hero">
-        <p class="eyebrow">SERVICE HEALTH</p>
-        <h1>System status</h1>
-        <p class="subtitle">Real-time checks for the services behind KitaWatch.</p>
+        <p class="eyebrow">SERVICE STATUS</p>
+        <h1>KitaWatch system status</h1>
+        <p class="subtitle">Current health, response times and recent uptime for monitored services.</p>
         <div id="overall" class="overall checking" role="status" aria-live="polite">
           <span class="status-dot"></span><span id="overall-text">Loading current status…</span>
         </div>
@@ -32,7 +32,7 @@
 
       <section aria-labelledby="services-heading" class="section">
         <div class="section-heading">
-          <div><p class="eyebrow">LIVE MONITORING</p><h2 id="services-heading">Services</h2></div>
+          <div><p class="eyebrow">CURRENT HEALTH</p><h2 id="services-heading">Services</h2></div>
           <span class="muted small">Checks run hourly</span>
         </div>
         <div id="services" class="service-grid">
@@ -41,13 +41,13 @@
       </section>
 
       <section class="section">
-        <div class="section-heading"><div><p class="eyebrow">RELIABILITY</p><h2>Uptime</h2></div></div>
-        <div id="uptime" class="uptime-grid">
-          <div class="uptime-card"><span>24 hours</span><strong>—</strong></div>
-          <div class="uptime-card"><span>7 days</span><strong>—</strong></div>
-          <div class="uptime-card"><span>30 days</span><strong>—</strong></div>
+        <div class="section-heading">
+          <div><p class="eyebrow">RELIABILITY</p><h2>Uptime history</h2></div>
         </div>
-        <p class="fine-print">Uptime is calculated from recorded hourly checks. It is an estimate, not a guarantee of uninterrupted playback.</p>
+        <div id="uptime" class="uptime-grid">
+          <div class="uptime-card"><span>Loading uptime history…</span></div>
+        </div>
+        <p class="fine-print">Each bar represents one calendar day. Green means all recorded checks that day were operational; yellow means degraded; red means an outage; gray means no check data. Percentages use recorded samples, so they are estimates rather than guarantees.</p>
       </section>
 
       <section class="section">
