@@ -15,7 +15,7 @@ import type {
 /** Hosted KitaWatch API. Override at build time for local development. */
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL as string | undefined
-)?.trim().replace(/\\/+$/, '') || 'https://api.kitawatch.free.nf';
+)?.trim().replace(/\/+$/, '') || 'https://api.kitawatch.free.nf';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 
