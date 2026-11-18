@@ -225,6 +225,14 @@ async function mapAnime(anilistId: number | string): Promise<AnimeIdMappings> {
 
 export const anivexa = {
   mapAnime,
+  /** Read provider episode availability from the hosted Anivexa service. */
+  async episodes(anilistId: number | string): Promise<Record<string, unknown>> {
+    const id = Number(anilistId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new Error(`Invalid AniList ID: ${anilistId}`);
+    }
+    return withTimeout(get<Record<string, unknown>>(`/episodes/${id}`), 10_000);
+  },
   /** Query all providers in parallel; merge every success.
    *  Each provider gets 12s — slow/hung providers can't delay the chain. */
   async watchAll(

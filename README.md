@@ -2,7 +2,7 @@
 
 # KitaWatch
 
-**A cross-platform desktop anime streaming client — local-first, no central server, automatic updates.**
+**A cross-platform desktop anime streaming client with hosted metadata APIs, a local playback proxy, and automatic updates.**
 
 [![Release](https://img.shields.io/github/v/release/F0xyN0xy/KitaWatch?style=for-the-badge)](https://github.com/F0xyN0xy/KitaWatch/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/F0xyN0xy/KitaWatch/total?style=for-the-badge)](https://github.com/F0xyN0xy/KitaWatch/releases)
@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/F0xyN0xy/KitaWatch?style=for-the-badge&logo=github)](https://github.com/F0xyN0xy/KitaWatch/graphs/contributors)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![React](https://img.shields.io/badge/React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
@@ -52,8 +52,7 @@ Download the latest installer from
 | Windows | `KitaWatch_*_x64-setup.exe` (or `.msi`) |
 | Linux | `.deb`, `.rpm`, or `.AppImage` |
 
-Everything is bundled — **no Python, Node, or configuration needed**. The app
-spawns its own local backends on first launch (give it ~15 seconds).
+Everything needed for the desktop runtime is bundled — **no Python, Node, or configuration needed**. The app starts its local playback proxy and currently retained compatibility sidecars on first launch. Metadata and provider requests also use hosted KitaWatch services, so an internet connection is required.
 
 **Updates are automatic**: the app checks GitHub Releases on launch and offers
 one-click, cryptographically signed updates.
@@ -77,16 +76,27 @@ one-click, cryptographically signed updates.
 ## Architecture
 
 ```
-React 18 + TypeScript + Vite + Tailwind v4      (UI, lazy routes)
+React 19 + TypeScript + Vite + Tailwind v4
         │
-        ├─► kitawatch-kuhi-api   (Python 3.12, :8000)  search · metadata · extraction
-        ├─► kitawatch-proxy      (Python 3.12, :8001)  CORS relay · referer spoof · m3u8 rewrite · OAuth
-        └─► kitawatch-anivexa    (Node,        :4000)  15-provider aggregator
+        ├─► Hosted KitaWatch API       catalogue · metadata · extraction
+        ├─► Hosted Anivexa API         15-provider episode and stream lookup
+        └─► Local playback proxy      CORS relay · referer handling · HLS rewriting
 ```
 
-All three backends are vendored in [`api/`](./api) and bundled as standalone
-binaries — every user runs their own instance locally. There is no central
-server. Shell: Tauri v2 (Rust). Updates: minisign-signed.
+The frontend uses the hosted KitaWatch API for catalogue and extraction requests
+and the separately hosted Anivexa service for Anivexa provider requests. The
+local playback proxy remains part of desktop playback for CORS, referer handling,
+and HLS playlist/segment forwarding.
+
+The desktop app still builds and starts local Kuhi and Anivexa compatibility
+sidecars, in addition to the playback proxy. They are retained in the current
+bundle and startup lifecycle; this release does **not** remove those processes.
+Their eventual removal needs a separate migration and runtime verification.
+
+The Kuhi source is fetched into the git-ignored `api/anime-api/` directory by
+`npm run setup:api`; tracked Anivexa sources live in `api/anivexa/`, and the
+playback proxy source lives in `proxy/`. Shell: Tauri v2 (Rust). Updates:
+minisign-signed.
 
 ## Building from source
 

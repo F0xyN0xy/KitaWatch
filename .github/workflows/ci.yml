@@ -37,12 +37,6 @@ jobs:
       - name: Fetch Kuhi API (vendored fork)
         run: npm run setup:api
 
-      - name: Install Python deps + PyInstaller
-        run: |
-          python -m pip install pyinstaller
-          python -m pip install -r api/anime-api/requirements.txt
-          python -m pip install -r proxy/requirements.txt
-      
       - name: Write placeholder .env (cargo check validates bundle resources)
         run: printf 'ANILIST_CLIENT_ID=0\nANILIST_CLIENT_SECRET=ci\nANILIST_REDIRECT_URI=kitawatch://auth\n' > src-tauri/.env
 

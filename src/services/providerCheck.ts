@@ -2,6 +2,7 @@ import { api } from './api';
 import { anikage } from './anikage';
 import { consumet } from './consumet';
 import { animepahe } from './animepahe';
+import { anivexa } from './anivexa';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 export interface ProviderStatus {
@@ -41,9 +42,7 @@ export async function checkProviders(
 
   if (s.enableAnivexa) {
     jobs.push(guard('Anivexa (15 providers)', (async () => {
-      const res = await fetch(`${s.anivexaBaseUrl.replace(/\/$/, '')}/episodes/${animeId}`);
-      if (!res.ok) return { name: 'Anivexa (15 providers)', status: 'error', detail: `HTTP ${res.status}` };
-      const j: unknown = await res.json();
+      const j = await anivexa.episodes(animeId);
       const providers = (j as Record<string, unknown>)?.providers ?? j;
       const entries =
         providers && typeof providers === 'object'
