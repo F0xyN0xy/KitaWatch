@@ -35,8 +35,6 @@ writeFileSync(
 
 console.log(`[release] bumped to ${version}`);
 run('git add .');
-// Version may already be bumped in the working copy (e.g. re-running the
-// script) — an empty commit exits 1 and would abort before the tag push.
 const staged = execSync('git status --porcelain', { cwd: root, encoding: 'utf8' }).trim();
 if (staged) {
   run(`git commit -m "${tag}"`);
@@ -44,9 +42,9 @@ if (staged) {
   console.log('[release] nothing to commit — versions already bumped');
 }
 
-// Re-running a release command is safe when its tag already points to HEAD.
-// Never move an existing tag automatically: a tag pointing elsewhere is a
-// release-history conflict and must be resolved deliberately.
+// An existing release tag may point to an earlier commit on main. That is
+// normal after follow-up maintenance commits. Keep the tag immutable, and
+// only accept it when its target is an ancestor of HEAD.
 const existingTag = execSync(`git tag --list "${tag}"`, {
   cwd: root,
   encoding: 'utf8',
@@ -61,13 +59,18 @@ if (existingTag) {
     encoding: 'utf8',
   }).trim();
 
-  if (taggedCommit !== headCommit) {
+  try {
+    execSync(`git merge-base --is-ancestor ${taggedCommit} ${headCommit}`, {
+      cwd: root,
+      stdio: 'ignore',
+    });
+  } catch {
     throw new Error(
-      `Tag ${tag} already exists at ${taggedCommit}, but HEAD is ${headCommit}. ` +
+      `Tag ${tag} already exists at ${taggedCommit}, but that commit is not an ancestor of HEAD (${headCommit}). ` +
       'Refusing to move the existing release tag automatically.',
     );
   }
-  console.log(`[release] tag ${tag} already points to HEAD — skipping tag creation`);
+  console.log(`[release] existing tag ${tag} points to an earlier commit on this branch — keeping it unchanged`);
 } else {
   run(`git tag ${tag}`);
 }
