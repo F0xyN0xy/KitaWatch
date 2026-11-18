@@ -1,35 +1,59 @@
-# api/ — vendored sidecar sources
+# Local sidecar sources
 
-These are the local backends KitaWatch bundles and spawns on the user's
-machine. They are **vendored** (committed here) so every build — yours, your
-friends', CI's — compiles the exact same code, including local patches.
+The current desktop build still starts three local services and bundles
+standalone binaries for release builds. Separately, the frontend uses hosted
+KitaWatch and Anivexa endpoints for metadata and provider requests. The local
+Kuhi and Anivexa processes remain in the startup/build lifecycle for now; this
+documentation does not imply that they have already been removed.
 
-| Folder | Upstream | Runtime | Port |
-|---|---|---|---|
-| `anime-api/` | [aryaniiil/kuhi-anime-api](https://github.com/aryaniiil/kuhi-anime-api) | Python 3.12 + FastAPI/uvicorn | 8000 |
-| `anivexa/` | [walterwhite-69/Anivexa-API](https://github.com/walterwhite-69/Anivexa-API) | Node 18+ | 4000 |
-| `../proxy/` | (this repo) | Python 3.12 + FastAPI/httpx | 8001 |
+| Service | Source location | How it is obtained | Runtime | Port |
+|---|---|---|---|---|
+| Kuhi API | `api/anime-api/` | Cloned by `npm run setup:api`; ignored by Git | Python 3.12 + FastAPI/uvicorn | 8000 |
+| Anivexa | `api/anivexa/` | Tracked in this repository | Node.js | 4000 |
+| Playback proxy | `proxy/` | Tracked at repository root | Python 3.12 + FastAPI/httpx | 8001 |
 
-## Local patches applied
+## Development setup
 
-- `anime-api/src/extractor.py` — AniList queries retry 3× with backoff
-  (upstream has none; transient `httpx.ReadError` crashed `/anime/info`).
-- `anime-api/src/config.py` — removed dead `miruro.online` mirror
-  (DNS-fails on every episode lookup).
-- `anivexa/core/smartcache.js` — converted ESM→CJS (pkg cannot
-  transform top-level await; required for the bundled exe).
-
-## Refreshing from upstream
+Run:
 
 ```bash
-npm run setup:api       # or setup:anivexa
+npm install
+npm run setup:api
+npm run setup:anivexa
+npm run tauri dev
 ```
 
-then re-apply the patches above (diff against this folder) and commit.
+`setup:api` clones the Kuhi fork into the ignored `api/anime-api/` directory
+and creates isolated Python environments for Kuhi and the playback proxy.
+`setup:anivexa` installs the Node dependencies for the tracked Anivexa source.
 
-## Bundled binaries
+The Tauri app starts the local services automatically in development. The
+standalone `npm run api` command is available when you want to run Kuhi
+separately for debugging.
 
-`npm run build:sidecars` compiles each into a standalone, windowless
-executable (`kitawatch-kuhi-api`, `kitawatch-proxy`, `kitawatch-anivexa`),
-placed in `src-tauri/binaries/` and embedded into installers via Tauri
-`externalBin`. Nothing here needs to be installed on end-user machines.
+## Building release sidecars
+
+`npm run build:sidecars` builds the local services into standalone binaries:
+
+- `kitawatch-kuhi-api` — PyInstaller
+- `kitawatch-proxy` — PyInstaller
+- `kitawatch-anivexa` — `@yao-pkg/pkg`
+
+The binaries are written to `src-tauri/binaries/` and embedded in the Tauri
+installers through `bundle.externalBin`. End users do not need Python or Node
+installed separately.
+
+The build script installs PyInstaller into each service's isolated Python
+environment. Do not add a second global Python dependency installation to CI
+or release workflows unless the build process is deliberately changed.
+
+## Refreshing sources
+
+- Kuhi: `npm run setup:api` (set `KITAWATCH_API_UPDATE=1` to pull an existing
+  checkout).
+- Anivexa: update `api/anivexa/` from its upstream deliberately, then review
+  local changes before committing.
+
+Keep the sidecar source directories until the desktop app no longer builds or
+starts those local services. A hosted endpoint does not automatically replace
+the local sidecar used by the installed desktop app.
