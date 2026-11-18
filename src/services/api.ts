@@ -524,7 +524,12 @@ export const api = {
   providersStatus: () => request<ProviderStatus>('/providers/status'),
 };
 
-/** Proxy helpers for m3u8 playlists and segments (local sidecar). */
+/**
+ * Playback proxy helpers intentionally target the local sidecar.
+ * The hosted metadata API does not expose equivalent HLS playlist/segment
+ * rewriting or generic CORS-relay routes, so these must remain local until
+ * a compatible hosted replacement is implemented and tested.
+ */
 export const proxy = {
   m3u8: (url: string, referer = '') =>
     `${useSettingsStore.getState().proxyBaseUrl}/proxy_m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`,
