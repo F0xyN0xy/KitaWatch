@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-18T20:12:58.176Z",
+  "generatedAt": "2026-11-18T20:19:25.508Z",
   "overall": "degraded",
   "services": [
     {
@@ -15,23 +15,23 @@
     {
       "id": "anivexa",
       "name": "Anivexa",
-      "description": "Hosted Anivexa API process health."
+      "description": "Hosted Anivexa API reachability and valid JSON response."
     }
   ],
   "current": {
     "api": {
       "status": "operational",
-      "latencyMs": 1653,
+      "latencyMs": 1193,
       "httpStatus": 200
     },
     "kuhi": {
       "status": "operational",
-      "latencyMs": 613,
+      "latencyMs": 422,
       "httpStatus": 200
     },
     "anivexa": {
       "status": "degraded",
-      "latencyMs": 759,
+      "latencyMs": 529,
       "httpStatus": 200
     }
   },
@@ -92,6 +92,26 @@
         "anivexa": {
           "status": "degraded",
           "latencyMs": 759,
+          "httpStatus": 200
+        }
+      }
+    },
+    {
+      "timestamp": "2026-11-18T20:19:25.508Z",
+      "services": {
+        "api": {
+          "status": "operational",
+          "latencyMs": 1193,
+          "httpStatus": 200
+        },
+        "kuhi": {
+          "status": "operational",
+          "latencyMs": 422,
+          "httpStatus": 200
+        },
+        "anivexa": {
+          "status": "degraded",
+          "latencyMs": 529,
           "httpStatus": 200
         }
       }
