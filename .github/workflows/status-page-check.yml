@@ -11,6 +11,9 @@ on:
       - "status-page/**"
       - ".github/workflows/status-page*.yml"
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
