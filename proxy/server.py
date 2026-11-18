@@ -35,6 +35,7 @@ DEFAULT_ALLOWLIST = {
     "nyaa.si",
     # providers
     "1anime.app",
+    "kitawatch-anivexa-yya5k.faable.link",  # hosted KitaWatch Anivexa API
     "anify.tv",       # Anify public API (api.anify.tv)
     # local sidecars
     "localhost",
