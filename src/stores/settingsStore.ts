@@ -80,7 +80,7 @@ interface SettingsState {
   enableConsumetFallback: boolean;
   /** Local proxy sidecar (CORS + referer + m3u8 rewrite). */
   proxyBaseUrl: string;
-  /** Bundled Anivexa sidecar (Node, by-AniList-ID provider aggregator). */
+  /** Hosted Anivexa service used for provider playback. */
   anivexaBaseUrl: string;
   enableAnivexa: boolean;
   /** #4: remember fullscreen state and restore it on the next playback. */
@@ -160,7 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
       consumetBaseUrl: import.meta.env.VITE_CONSUMET_BASE_URL ?? 'http://localhost:3000',
       enableConsumetFallback: false,
       proxyBaseUrl: sidecarDefault(import.meta.env.VITE_PROXY_BASE_URL, 'http://localhost:8001'),
-      anivexaBaseUrl: sidecarDefault(import.meta.env.VITE_ANIVEXA_BASE_URL, 'http://localhost:4000'),
+      anivexaBaseUrl: (import.meta.env.VITE_ANIVEXA_BASE_URL as string | undefined)?.trim().replace(/\\/+$/, '') || 'https://kitawatch-anivexa-yya5k.faable.link',
       enableAnivexa: true,
       rememberFullscreen: true,
       lastFullscreen: false,
@@ -208,7 +208,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 13,
+      version: 14,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
@@ -266,6 +266,10 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (version < 13) {
           s.themeStyle = s.themeStyle ?? 'plum';
+        }
+        if (version < 14) {
+          // Anivexa now runs as a separately hosted service instead of a bundled sidecar.
+          s.anivexaBaseUrl = 'https://kitawatch-anivexa-yya5k.faable.link';
         }
         return s as SettingsState;
       },
