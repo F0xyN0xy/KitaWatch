@@ -1,8 +1,10 @@
 # Local sidecar sources
 
-KitaWatch runs three local services during desktop development and bundles
-standalone binaries for release builds. The sources are not all stored in this
-folder.
+The current desktop build still starts three local services and bundles
+standalone binaries for release builds. Separately, the frontend uses hosted
+KitaWatch and Anivexa endpoints for metadata and provider requests. The local
+Kuhi and Anivexa processes remain in the startup/build lifecycle for now; this
+documentation does not imply that they have already been removed.
 
 | Service | Source location | How it is obtained | Runtime | Port |
 |---|---|---|---|---|
