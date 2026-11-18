@@ -12,8 +12,10 @@ import type {
   SpotlightAnime,
 } from '@/types';
 
-/** The app always talks to its own bundled sidecars. */
-const API_BASE_URL = 'http://127.0.0.1:8000';
+/** Hosted KitaWatch API. Override at build time for local development. */
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL as string | undefined
+)?.trim().replace(/\/+$/, '') || 'https://api.kitawatch.free.nf';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 
@@ -189,6 +191,7 @@ interface RawEpisode {
 }
 
 interface EpisodesEnvelope {
+  /** Unified API and legacy Kuhi responses both expose provider payloads here. */
   providers?: Record<
     string,
     {
@@ -313,7 +316,7 @@ const jikanEpisodePageCache = new Map<string, Promise<EpisodeSummary[]>>();
 function providerEpisodesFor(id: number): Promise<EpisodeSummary[]> {
   const cached = providerEpisodeCache.get(id);
   if (cached) return cached;
-  const pending = request<unknown>(`/anime/episodes/${id}`)
+  const pending = request<unknown>(`/episodes/unified/${id}`)
     .then(adaptEpisodes)
     .catch((error) => {
       providerEpisodeCache.delete(id);
@@ -514,14 +517,19 @@ export const api = {
 
   // Streaming
   extract: (query: number | string, episode: number, audio: AudioType = 'sub') =>
-    request<ExtractResponse>(`/anime/extract/${encodeURIComponent(String(query))}`, {
+    request<ExtractResponse>(`/extract/${encodeURIComponent(String(query))}`, {
       e: episode,
       type: audio,
     }),
-  providersStatus: () => request<ProviderStatus>('/anime/providers/status'),
+  providersStatus: () => request<ProviderStatus>('/providers/status'),
 };
 
-/** Proxy helpers for m3u8 playlists and segments (local sidecar). */
+/**
+ * Playback proxy helpers intentionally target the local sidecar.
+ * The hosted metadata API does not expose equivalent HLS playlist/segment
+ * rewriting or generic CORS-relay routes, so these must remain local until
+ * a compatible hosted replacement is implemented and tested.
+ */
 export const proxy = {
   m3u8: (url: string, referer = '') =>
     `${useSettingsStore.getState().proxyBaseUrl}/proxy_m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`,

@@ -42,12 +42,6 @@ jobs:
       - name: Fetch Kuhi API (vendored fork)
         run: npm run setup:api
 
-      - name: Install Python deps + PyInstaller
-        run: |
-          python -m pip install pyinstaller
-          python -m pip install -r api/anime-api/requirements.txt
-          python -m pip install -r proxy/requirements.txt
-
       - name: Write build environment
         shell: bash
         env:

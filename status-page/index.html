@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b12">
+  <meta name="description" content="Live service health and uptime for KitaWatch.">
+  <title>KitaWatch Status</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="KitaWatch Status home">
+        <span class="brand-mark">K</span><span>Kita<span class="accent">Watch</span></span>
+      </a>
+      <a class="back-link" href="https://kitawatch.free.nf">Main website <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SERVICE HEALTH</p>
+        <h1>System status</h1>
+        <p class="subtitle">Real-time checks for the services behind KitaWatch.</p>
+        <div id="overall" class="overall checking" role="status" aria-live="polite">
+          <span class="status-dot"></span><span id="overall-text">Loading current status…</span>
+        </div>
+        <p id="updated" class="updated">Waiting for the first monitoring result</p>
+      </section>
+
+      <section aria-labelledby="services-heading" class="section">
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE MONITORING</p><h2 id="services-heading">Services</h2></div>
+          <span class="muted small">Checks run hourly</span>
+        </div>
+        <div id="services" class="service-grid">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><div><p class="eyebrow">RELIABILITY</p><h2>Uptime</h2></div></div>
+        <div id="uptime" class="uptime-grid">
+          <div class="uptime-card"><span>24 hours</span><strong>—</strong></div>
+          <div class="uptime-card"><span>7 days</span><strong>—</strong></div>
+          <div class="uptime-card"><span>30 days</span><strong>—</strong></div>
+        </div>
+        <p class="fine-print">Uptime is calculated from recorded hourly checks. It is an estimate, not a guarantee of uninterrupted playback.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><div><p class="eyebrow">RECENT ACTIVITY</p><h2>Incident history</h2></div></div>
+        <div id="incidents" class="incident-list"><p class="empty">Loading incident history…</p></div>
+      </section>
+    </main>
+
+    <footer>
+      <span>KitaWatch Status</span><span id="footer-check">Monitoring data is loading</span>
+    </footer>
+  </div>
+</body>
+</html>

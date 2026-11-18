@@ -44,14 +44,12 @@ function isLoopbackUrl(url: unknown): url is string {
 }
 
 /**
- * The Anivexa and proxy sidecars are bundled with the app and always local.
- * Old releases were built with VITE_* env vars pointing at a hosted API
- * (*.kitawatch.nx.kg) that no longer exists; those URLs were persisted into
- * users' localStorage and poisoned every provider call with DNS failures.
- * Only loopback URLs are ever valid for these two settings — a remote or
- * dead value is silently replaced by the local default.
+ * The playback proxy is a bundled local sidecar. Ignore remote build-time
+ * proxy URLs so a stale environment value cannot redirect local proxy calls.
+ * Anivexa is hosted separately and is intentionally not covered by this
+ * loopback-only validation.
  */
-function sidecarDefault(env: unknown, fallback: string): string {
+function localProxyDefault(env: unknown, fallback: string): string {
   return isLoopbackUrl(env) ? (env as string) : fallback;
 }
 
@@ -80,7 +78,7 @@ interface SettingsState {
   enableConsumetFallback: boolean;
   /** Local proxy sidecar (CORS + referer + m3u8 rewrite). */
   proxyBaseUrl: string;
-  /** Bundled Anivexa sidecar (Node, by-AniList-ID provider aggregator). */
+  /** Hosted Anivexa service used for provider playback. */
   anivexaBaseUrl: string;
   enableAnivexa: boolean;
   /** #4: remember fullscreen state and restore it on the next playback. */
@@ -159,8 +157,8 @@ export const useSettingsStore = create<SettingsState>()(
       // just adds a guaranteed connection-refused to every episode.
       consumetBaseUrl: import.meta.env.VITE_CONSUMET_BASE_URL ?? 'http://localhost:3000',
       enableConsumetFallback: false,
-      proxyBaseUrl: sidecarDefault(import.meta.env.VITE_PROXY_BASE_URL, 'http://localhost:8001'),
-      anivexaBaseUrl: sidecarDefault(import.meta.env.VITE_ANIVEXA_BASE_URL, 'http://localhost:4000'),
+      proxyBaseUrl: localProxyDefault(import.meta.env.VITE_PROXY_BASE_URL, 'http://localhost:8001'),
+      anivexaBaseUrl: (import.meta.env.VITE_ANIVEXA_BASE_URL as string | undefined)?.trim().replace(/\/+$/, '') || 'https://kitawatch-anivexa-yya5k.faable.link',
       enableAnivexa: true,
       rememberFullscreen: true,
       lastFullscreen: false,
@@ -208,13 +206,12 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'kitawatch-settings',
-      version: 13,
+      version: 14,
       migrate: (persisted, version) => {
         const s = { ...((persisted as Partial<SettingsState>) ?? {}) };
         if (version < 2) {
-          // v1 persisted whatever the build-time defaults were — including
-          // the dead hosted-API URLs from old releases. Force loopback.
-          if (!isLoopbackUrl(s.anivexaBaseUrl)) s.anivexaBaseUrl = 'http://localhost:4000';
+          // The playback proxy is a local sidecar and must use loopback.
+          // Anivexa is migrated separately below to its hosted endpoint.
           if (!isLoopbackUrl(s.proxyBaseUrl)) s.proxyBaseUrl = 'http://localhost:8001';
         }
         if (version < 3) {
@@ -266,6 +263,10 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (version < 13) {
           s.themeStyle = s.themeStyle ?? 'plum';
+        }
+        if (version < 14) {
+          // Anivexa now runs as a separately hosted service instead of a bundled sidecar.
+          s.anivexaBaseUrl = 'https://kitawatch-anivexa-yya5k.faable.link';
         }
         return s as SettingsState;
       },

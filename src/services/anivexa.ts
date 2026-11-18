@@ -29,14 +29,6 @@ function proxyBase(): string {
   return useSettingsStore.getState().proxyBaseUrl.replace(/\/$/, '');
 }
 
-function localSidecarUrl(url: string): boolean {
-  try {
-    return ['localhost', '127.0.0.1', '::1'].includes(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
-
 async function responseError(res: Response): Promise<string> {
   const body = await res.text().catch(() => '');
   if (!body) return '';
@@ -68,10 +60,11 @@ async function get<T>(path: string): Promise<T> {
     }
   }
 
-  // A 4xx/5xx from the local sidecar is the actual provider error. Proxying
-  // localhost:4000 through localhost:8001 only repeats the same failure and
-  // hides the useful response body, so preserve it for the resolver/UI.
-  if (direct && !direct.ok && localSidecarUrl(url)) {
+  // Any HTTP response means the upstream was reached. Preserve its
+  // status and response body instead of issuing the same request again
+  // through the local proxy. The proxy remains a fallback for network/CORS
+  // failures where fetch produced no HTTP response.
+  if (direct && !direct.ok) {
     const detail = await responseError(direct);
     throw new Error(
       `Anivexa HTTP ${direct.status} for ${path}${detail ? `: ${detail}` : ''}`,
@@ -232,6 +225,14 @@ async function mapAnime(anilistId: number | string): Promise<AnimeIdMappings> {
 
 export const anivexa = {
   mapAnime,
+  /** Read provider episode availability from the hosted Anivexa service. */
+  async episodes(anilistId: number | string): Promise<Record<string, unknown>> {
+    const id = Number(anilistId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new Error(`Invalid AniList ID: ${anilistId}`);
+    }
+    return withTimeout(get<Record<string, unknown>>(`/episodes/${id}`), 10_000);
+  },
   /** Query all providers in parallel; merge every success.
    *  Each provider gets 12s — slow/hung providers can't delay the chain. */
   async watchAll(
