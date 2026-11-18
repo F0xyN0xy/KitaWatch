@@ -1,5 +1,6 @@
 {
-  "generatedAt": null,
+  "generatedAt": "2026-11-18T19:17:36.163Z",
+  "overall": "degraded",
   "services": [
     {
       "id": "api",
@@ -17,7 +18,61 @@
       "description": "Hosted Anivexa episode catalogue service."
     }
   ],
-  "current": {},
-  "history": [],
-  "incidents": []
+  "current": {
+    "api": {
+      "status": "operational",
+      "latencyMs": 1225,
+      "httpStatus": 200
+    },
+    "kuhi": {
+      "status": "outage",
+      "latencyMs": 12002,
+      "httpStatus": null
+    },
+    "anivexa": {
+      "status": "outage",
+      "latencyMs": 12001,
+      "httpStatus": null
+    }
+  },
+  "history": [
+    {
+      "timestamp": "2026-11-18T19:17:36.163Z",
+      "services": {
+        "api": {
+          "status": "operational",
+          "latencyMs": 1225,
+          "httpStatus": 200
+        },
+        "kuhi": {
+          "status": "outage",
+          "latencyMs": 12002,
+          "httpStatus": null
+        },
+        "anivexa": {
+          "status": "outage",
+          "latencyMs": 12001,
+          "httpStatus": null
+        }
+      }
+    }
+  ],
+  "incidents": [
+    {
+      "id": "anivexa-1795029456165",
+      "serviceId": "anivexa",
+      "title": "Anivexa is experiencing issues",
+      "description": "The automated health check detected a service disruption or incomplete response.",
+      "startedAt": "2026-11-18T19:17:36.163Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "kuhi-1795029456165",
+      "serviceId": "kuhi",
+      "title": "Kuhi catalogue is experiencing issues",
+      "description": "The automated health check detected a service disruption or incomplete response.",
+      "startedAt": "2026-11-18T19:17:36.163Z",
+      "resolvedAt": null
+    }
+  ]
 }
