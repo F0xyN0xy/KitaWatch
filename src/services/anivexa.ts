@@ -29,14 +29,6 @@ function proxyBase(): string {
   return useSettingsStore.getState().proxyBaseUrl.replace(/\/$/, '');
 }
 
-function localSidecarUrl(url: string): boolean {
-  try {
-    return ['localhost', '127.0.0.1', '::1'].includes(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
-
 async function responseError(res: Response): Promise<string> {
   const body = await res.text().catch(() => '');
   if (!body) return '';
