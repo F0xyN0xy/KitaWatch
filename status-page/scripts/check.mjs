@@ -1,0 +1,81 @@
+import { readFile, writeFile } from 'node:fs/promises';
+
+const API_BASE = (process.env.KITAWATCH_API_URL || 'https://api.kitawatch.free.nf').replace(/\/+$/, '');
+const ANIVEXA_BASE = (process.env.ANIVEXA_BASE_URL || 'https://kitawatch-anivexa-yya5k.faable.link').replace(/\/+$/, '');
+const SAMPLE_ANILIST_ID = '154587';
+const TIMEOUT_MS = 12_000;
+const DATA_PATH = new URL('../data/status.json', import.meta.url);
+
+async function check(url, validate = () => true) {
+  const started = performance.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal, headers: { accept: 'application/json' } });
+    const latencyMs = Math.round(performance.now() - started);
+    if (!response.ok) return { status: 'outage', latencyMs, httpStatus: response.status };
+    let payload;
+    try { payload = await response.json(); } catch { return { status: 'degraded', latencyMs, httpStatus: response.status }; }
+    return { status: validate(payload) ? 'operational' : 'degraded', latencyMs, httpStatus: response.status };
+  } catch {
+    return { status: 'outage', latencyMs: Math.round(performance.now() - started), httpStatus: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const services = [
+  { id: 'api', name: 'KitaWatch API', description: 'Core API health and unified provider routing.' },
+  { id: 'kuhi', name: 'Kuhi catalogue', description: 'Kuhi episode catalogue adapter through the unified API.' },
+  { id: 'anivexa', name: 'Anivexa', description: 'Hosted Anivexa episode catalogue service.' },
+];
+
+const apiHealth = await check(API_BASE + '/health', (body) => body?.status === 'healthy');
+const kuhi = await check(API_BASE + '/episodes/unified/' + SAMPLE_ANILIST_ID, (body) =>
+  body?.source === 'unified' && body?.adapters?.kuhi?.available === true);
+const anivexa = await check(ANIVEXA_BASE + '/episodes/' + SAMPLE_ANILIST_ID, (body) =>
+  body && typeof body === 'object' && Object.keys(body).some((key) =>
+    !['page', 'type', 'mappings', 'meta', 'metadata', 'error'].includes(key) && body[key] && typeof body[key] === 'object'));
+
+const current = { api: apiHealth, kuhi, anivexa };
+const states = Object.values(current).map((item) => item.status);
+const overall = states.every((state) => state === 'operational') ? 'operational'
+  : states.every((state) => state === 'outage') ? 'outage' : 'degraded';
+const now = new Date().toISOString();
+
+let previous;
+try { previous = JSON.parse(await readFile(DATA_PATH, 'utf8')); }
+catch { previous = { history: [], incidents: [] }; }
+
+const history = [...(Array.isArray(previous.history) ? previous.history : []), { timestamp: now, services: current }]
+  .filter((row) => Date.now() - new Date(row.timestamp).getTime() <= 30 * 24 * 60 * 60 * 1000);
+
+const incidents = Array.isArray(previous.incidents) ? [...previous.incidents] : [];
+for (const service of services) {
+  const before = previous.current?.[service.id]?.status || 'unknown';
+  const after = current[service.id].status;
+  if (before === 'operational' && after !== 'operational') {
+    incidents.unshift({
+      id: service.id + '-' + Date.now(),
+      serviceId: service.id,
+      title: service.name + ' is experiencing issues',
+      description: 'The automated health check detected a service disruption or incomplete response.',
+      startedAt: now,
+      resolvedAt: null,
+    });
+  } else if (before !== 'operational' && after === 'operational') {
+    const open = incidents.find((incident) => incident.serviceId === service.id && !incident.resolvedAt);
+    if (open) open.resolvedAt = now;
+  }
+}
+
+const output = {
+  generatedAt: now,
+  overall,
+  services,
+  current,
+  history,
+  incidents: incidents.slice(0, 50),
+};
+await writeFile(DATA_PATH, JSON.stringify(output, null, 2) + '\n');
+console.log(JSON.stringify({ generatedAt: now, overall, current }, null, 2));
