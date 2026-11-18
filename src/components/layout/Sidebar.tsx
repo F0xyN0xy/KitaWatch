@@ -122,6 +122,14 @@ export default function Sidebar() {
             Bugs & Ideas
           </a>
           <a
+            href="https://status.kitawatch.free.nf"
+            target="_blank"
+            rel="noreferrer"
+            className="text-zinc-500 hover:text-zinc-300"
+          >
+            Service Status
+          </a>
+          <a
             href="https://kitawatch.free.nf"
             target="_blank"
             rel="noreferrer"

@@ -1,0 +1,27 @@
+name: Status page checks
+
+on:
+  pull_request:
+    paths:
+      - "status-page/**"
+      - ".github/workflows/status-page*.yml"
+  push:
+    branches: [main]
+    paths:
+      - "status-page/**"
+      - ".github/workflows/status-page*.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check monitoring script syntax
+        run: node --check status-page/scripts/check.mjs
+      - name: Check page script syntax
+        run: node --check status-page/app.js
+      - name: Validate status data JSON
+        run: node -e "JSON.parse(require('node:fs').readFileSync('status-page/data/status.json', 'utf8'))"

@@ -1,0 +1,23 @@
+{
+  "generatedAt": null,
+  "services": [
+    {
+      "id": "api",
+      "name": "KitaWatch API",
+      "description": "Core API health and unified provider routing."
+    },
+    {
+      "id": "kuhi",
+      "name": "Kuhi catalogue",
+      "description": "Kuhi episode catalogue adapter through the unified API."
+    },
+    {
+      "id": "anivexa",
+      "name": "Anivexa",
+      "description": "Hosted Anivexa episode catalogue service."
+    }
+  ],
+  "current": {},
+  "history": [],
+  "incidents": []
+}

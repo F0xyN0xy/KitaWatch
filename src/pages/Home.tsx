@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play } from 'lucide-react';
+import { Activity, ExternalLink, Play } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import AnimeRow from '@/components/anime/AnimeRow';
 import Button from '@/components/ui/Button';
@@ -131,6 +131,23 @@ export default function Home() {
 
   return (
     <PageContainer>
+      <a
+        href="https://status.kitawatch.free.nf"
+        target="_blank"
+        rel="noreferrer"
+        className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-accent-500/20 bg-ink-900/80 px-4 py-3 transition hover:border-accent-400/40 hover:bg-ink-800"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-500/10 text-accent-300">
+            <Activity className="h-4.5 w-4.5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-zinc-100">KitaWatch Service Status</span>
+            <span className="block text-xs text-zinc-400">View API and provider availability</span>
+          </span>
+        </span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-zinc-500" />
+      </a>
       {spotlight.error && !spotlight.data ? (
         <ErrorState
           title="Couldn't reach the API"
