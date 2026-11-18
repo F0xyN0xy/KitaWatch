@@ -13,6 +13,34 @@ function uptime(history, serviceId, hours) {
   const good = rows.filter((row) => row.services[serviceId].status === 'operational').length;
   return ((good / rows.length) * 100).toFixed(2) + '%';
 }
+function dayBars(history, serviceId, days = 30) {
+  const now = new Date();
+  const result = [];
+  for (let offset = days - 1; offset >= 0; offset--) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - offset);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const samples = (history || []).filter((row) => {
+      const time = new Date(row.timestamp).getTime();
+      return time >= start.getTime() && time < end.getTime() && row.services?.[serviceId];
+    });
+    let status = 'unknown';
+    if (samples.length) {
+      const states = samples.map((row) => row.services[serviceId].status);
+      status = states.includes('outage') ? 'outage'
+        : states.includes('degraded') ? 'degraded'
+        : states.every((state) => state === 'operational') ? 'operational' : 'unknown';
+    }
+    const dateLabel = start.toLocaleDateString(undefined, { dateStyle: 'medium' });
+    const detail = samples.length
+      ? `${dateLabel}: ${labels[status]} · ${samples.length} check${samples.length === 1 ? '' : 's'}`
+      : `${dateLabel}: No check data`;
+    result.push({ status, detail });
+  }
+  return result;
+}
 function render(data) {
   const services = data.services || [];
   const current = data.current || {};
@@ -41,16 +69,21 @@ function render(data) {
     </article>`;
   }).join('');
 
-  const metrics = [
-    ['24h', 24],
-    ['7d', 24 * 7],
-    ['30d', 24 * 30],
-  ];
-  document.querySelector('#uptime').innerHTML = services.map((service) =>
-    `<div class="uptime-card"><span>${esc(service.name)}</span><div class="periods">${metrics.map(([label, hours]) =>
-      `<div><small>${label}</small><strong>${uptime(data.history, service.id, hours)}</strong></div>`
-    ).join('')}</div></div>`
-  ).join('');
+  document.querySelector('#uptime').innerHTML = services.map((service) => {
+    const bars = dayBars(data.history, service.id);
+    return `<article class="uptime-card">
+      <div class="uptime-heading"><strong>${esc(service.name)}</strong><span>${uptime(data.history, service.id, 24 * 30)} <small>30-day uptime</small></span></div>
+      <div class="uptime-bars" role="img" aria-label="Daily uptime history for ${esc(service.name)}">${bars.map((bar) =>
+        `<span class="uptime-bar ${bar.status}" title="${esc(bar.detail)}" aria-label="${esc(bar.detail)}"></span>`
+      ).join('')}</div>
+      <div class="uptime-range"><span>30 days ago</span><span>Today</span></div>
+      <div class="uptime-periods">
+        <span>24 hours <strong>${uptime(data.history, service.id, 24)}</strong></span>
+        <span>7 days <strong>${uptime(data.history, service.id, 24 * 7)}</strong></span>
+        <span>30 days <strong>${uptime(data.history, service.id, 24 * 30)}</strong></span>
+      </div>
+    </article>`;
+  }).join('');
 
   const incidents = (data.incidents || []).slice(0, 12);
   document.querySelector('#incidents').innerHTML = incidents.length ? incidents.map((incident) =>
