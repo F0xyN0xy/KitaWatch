@@ -43,8 +43,8 @@ export default function SystemCheckPanel() {
     setRunning(true);
     setChecks([
       platformCheck(),
-      { id: 'api', label: 'Local API / metadata', detail: 'Checking the local API status endpoint…', status: 'checking' },
-      { id: 'proxy', label: 'Playback proxy', detail: 'Checking the local proxy service…', status: 'checking' },
+      { id: 'api', label: 'Hosted KitaWatch API', detail: 'Checking the hosted KitaWatch API status endpoint…', status: 'checking' },
+      { id: 'proxy', label: 'Local playback proxy', detail: 'Checking the local playback proxy sidecar…', status: 'checking' },
     ]);
 
     const os = platformCheck();
@@ -60,25 +60,25 @@ export default function SystemCheckPanel() {
     if (apiResult.status === 'fulfilled') {
       next.push({
         id: 'api',
-        label: 'Local API / metadata',
-        detail: 'The API status endpoint responded. Metadata requests can be attempted.',
+        label: 'Hosted KitaWatch API',
+        detail: 'The hosted API status endpoint responded. Metadata and provider requests can be attempted.',
         status: 'pass',
       });
     } else {
       next.push({
         id: 'api',
-        label: 'Local API / metadata',
-        detail: apiResult.reason instanceof Error ? apiResult.reason.message : 'The API status request failed.',
+        label: 'Hosted KitaWatch API',
+        detail: apiResult.reason instanceof Error ? apiResult.reason.message : 'The hosted API status request failed.',
         status: 'fail',
-        fix: 'Restart KitaWatch so its local API sidecar can start. If this persists, use Copy debug report in Troubleshooting.',
+        fix: 'Check your internet connection and retry. If the hosted API remains unavailable, wait and try again later; use Copy debug report in Troubleshooting if the problem persists.',
       });
     }
 
     if (proxyResult.status === 'fulfilled' && proxyResult.value.ok) {
       next.push({
         id: 'proxy',
-        label: 'Playback proxy',
-        detail: 'The local proxy responded to its OpenAPI endpoint.',
+        label: 'Local playback proxy',
+        detail: 'The local playback proxy sidecar responded to its OpenAPI endpoint.',
         status: 'pass',
       });
     } else {
@@ -87,7 +87,7 @@ export default function SystemCheckPanel() {
         : `Proxy returned HTTP ${proxyResult.value.status}.`;
       next.push({
         id: 'proxy',
-        label: 'Playback proxy',
+        label: 'Local playback proxy',
         detail,
         status: 'fail',
         fix: 'Restart KitaWatch and check that the local proxy on port 8001 starts. Use Copy debug report for sidecar and port diagnostics.',
@@ -112,7 +112,7 @@ export default function SystemCheckPanel() {
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">System Check</h2>
           <p className="text-sm text-zinc-300">
-            {running ? 'Checking local services…' : failures ? `${failures} check(s) need attention` : warnings ? 'Checks completed with a warning' : 'Local service checks completed'}
+            {running ? 'Checking system connections…' : failures ? `${failures} check(s) need attention` : warnings ? 'Checks completed with a warning' : 'System checks completed'}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void runChecks()} disabled={running}>
