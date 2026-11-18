@@ -41,9 +41,37 @@ const staged = execSync('git status --porcelain', { cwd: root, encoding: 'utf8' 
 if (staged) {
   run(`git commit -m "${tag}"`);
 } else {
-  console.log('[release] nothing to commit — versions already bumped, tagging existing tree');
+  console.log('[release] nothing to commit — versions already bumped');
 }
-run(`git tag ${tag}`);
+
+// Re-running a release command is safe when its tag already points to HEAD.
+// Never move an existing tag automatically: a tag pointing elsewhere is a
+// release-history conflict and must be resolved deliberately.
+const existingTag = execSync(`git tag --list "${tag}"`, {
+  cwd: root,
+  encoding: 'utf8',
+}).trim();
+if (existingTag) {
+  const taggedCommit = execSync(`git rev-parse "${tag}^{commit}"`, {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim();
+  const headCommit = execSync('git rev-parse HEAD', {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim();
+
+  if (taggedCommit !== headCommit) {
+    throw new Error(
+      `Tag ${tag} already exists at ${taggedCommit}, but HEAD is ${headCommit}. ` +
+      'Refusing to move the existing release tag automatically.',
+    );
+  }
+  console.log(`[release] tag ${tag} already points to HEAD — skipping tag creation`);
+} else {
+  run(`git tag ${tag}`);
+}
+
 run('git push origin main');
 run(`git push origin ${tag}`);
 console.log(`[release] ${tag} pushed — GitHub Actions is building the release now.`);
