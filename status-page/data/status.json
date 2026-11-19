@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-18T20:19:25.508Z",
+  "generatedAt": "2026-11-19T01:49:23.251Z",
   "overall": "degraded",
   "services": [
     {
@@ -21,17 +21,17 @@
   "current": {
     "api": {
       "status": "operational",
-      "latencyMs": 1193,
+      "latencyMs": 7653,
       "httpStatus": 200
     },
     "kuhi": {
       "status": "operational",
-      "latencyMs": 422,
+      "latencyMs": 559,
       "httpStatus": 200
     },
     "anivexa": {
       "status": "degraded",
-      "latencyMs": 529,
+      "latencyMs": 3452,
       "httpStatus": 200
     }
   },
@@ -112,6 +112,26 @@
         "anivexa": {
           "status": "degraded",
           "latencyMs": 529,
+          "httpStatus": 200
+        }
+      }
+    },
+    {
+      "timestamp": "2026-11-19T01:49:23.251Z",
+      "services": {
+        "api": {
+          "status": "operational",
+          "latencyMs": 7653,
+          "httpStatus": 200
+        },
+        "kuhi": {
+          "status": "operational",
+          "latencyMs": 559,
+          "httpStatus": 200
+        },
+        "anivexa": {
+          "status": "degraded",
+          "latencyMs": 3452,
           "httpStatus": 200
         }
       }
