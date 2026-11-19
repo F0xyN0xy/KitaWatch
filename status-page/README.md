@@ -1,46 +1,52 @@
 # KitaWatch Status Page
 
-The status page is a static GitHub Pages frontend. Live monitoring data is retrieved from the separate Node.js API in `status-api/`, which reads monitor information from UptimeRobot API v3.
+The status page is a static GitHub Pages frontend. Monitoring data is served by the Node.js API on Render and stored in the existing KitaWatch Supabase project.
 
 ## Architecture
 
 ```text
-UptimeRobot monitors
-        |
-        | API v3 (read-only token)
-        v
-KitaWatch Status API (Render)
-        |
-        | cached JSON
-        v
-KitaWatch Status Page (GitHub Pages)
+UptimeRobot (5-minute checks)
+          |
+          | API v3
+          v
+Render Status API <----- Supabase Cron (every 5 minutes)
+          |
+          | private RPC
+          v
+Supabase PostgreSQL
+          |
+          | GET /api/status
+          v
+GitHub Pages status page
 ```
 
-The UptimeRobot token is stored only as the `UPTIMEROBOT_API_KEY` environment variable on the Render service. It must never be added to this repository or frontend code.
+UptimeRobot's read-only API key, Supabase service-role key, and collector token are server-side secrets. They must never be added to this repository or frontend code.
 
-## Deploying the API to Render
+## Render API
 
-The service is configured with:
+The Render service is configured with:
 
 - Repository: this KitaWatch repository
-- Branch: `feature/uptimerobot-status-integration` during initial testing; switch to `main` after merging.
+- Branch: `feature/uptimerobot-status-integration` during rollout; switch to `main` after merging.
 - Build command: `npm install --omit=dev --prefix status-api`
 - Start command: `npm start --prefix status-api`
 - Region: Frankfurt
 - Plan: Free
-- Environment variable: `UPTIMEROBOT_API_KEY` = a UptimeRobot read-only API key
 
-The service exposes:
+Required environment variables are documented in [status-api/README.md](../status-api/README.md).
+
+Endpoints:
 
 - `GET /health` — Render health check.
-- `GET /api/status` — normalized monitor status, uptime statistics, and available incident data.
+- `GET /api/status` — public normalized status, daily history, and incidents.
+- `POST /api/collect` — private collector endpoint called by Supabase Cron.
 
-The API caches successful responses in memory for five minutes. The UptimeRobot Free API limit is 10 requests/minute. A refresh uses one monitor-list request, up to eight per-monitor uptime-stat requests, and one aggregate incident-log request. Therefore, detailed 30-day statistics are retrieved for at most eight monitors per refresh; additional monitors still show their current status. The cache is not persistent and resets when a sleeping Render instance wakes.
+## History semantics
 
-## Uptime data limitations
+Supabase stores one snapshot per monitor every five minutes. The 30-day uptime percentage and daily bars are calculated from those samples. They are sampled estimates, not UptimeRobot's individual raw checks or exact incident durations. Estimated downtime counts each recorded degraded/outage sample as one five-minute interval.
 
-Current monitor states come from UptimeRobot. Per-monitor 30-day uptime and downtime are read from the UptimeRobot statistics endpoint. The old hourly sample bars are intentionally not fabricated. Incident entries are read from the aggregated UptimeRobot uptime-stat logs when available.
+If the latest successful snapshot is older than 15 minutes, the current status is shown as unknown instead of presenting stale data as current. Historical bars with no samples are shown as unknown.
 
-## Status page deployment
+## Deployment
 
-GitHub Actions only validates and deploys the static `status-page/` directory. It no longer runs hourly checks or commits monitoring snapshots. The separate `status-page-check.yml` workflow validates the frontend and API JavaScript in pull requests.
+GitHub Actions only validates and deploys the static `status-page/` directory. It does not collect monitoring data or commit history files. The independent status API checks run in `.github/workflows/status-api-check.yml`.
