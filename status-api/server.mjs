@@ -117,7 +117,7 @@ async function uptimeRobotGet(url) {
 
 async function loadMonitors() {
   const monitors = [];
-  let nextUrl = new URL('/monitors?limit=100', API_BASE);
+  let nextUrl = new URL('monitors?limit=100', API_BASE + '/');
   let pageCount = 0;
 
   while (nextUrl && pageCount < 5) {
