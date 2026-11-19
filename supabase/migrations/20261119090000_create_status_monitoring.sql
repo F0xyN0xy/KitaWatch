@@ -2,8 +2,6 @@
 -- The status tables are intentionally not readable from anon/authenticated clients.
 
 create extension if not exists pg_cron;
-create schema if not exists net;
-create extension if not exists pg_net with schema net;
 
 create table if not exists public.status_monitor_samples (
   id bigint generated always as identity primary key,
