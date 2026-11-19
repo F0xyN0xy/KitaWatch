@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT || 3000);
 const API_BASE = (process.env.UPTIMEROBOT_API_BASE || 'https://api.uptimerobot.com/v3').replace(/\/+$/, '');
-const CACHE_TTL_MS = Number(process.env.STATUS_CACHE_TTL_MS || 60_000);
+const CACHE_TTL_MS = Number(process.env.STATUS_CACHE_TTL_MS || 300_000);
+const MAX_PER_MONITOR_STATS = 8;
 const CACHE_HEADERS = { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' };
 
 let cachedPayload = null;
@@ -28,6 +29,10 @@ function unwrapCollection(payload) {
   return [];
 }
 
+function unwrapObject(payload) {
+  return payload?.data && !Array.isArray(payload.data) ? payload.data : payload;
+}
+
 function normalizeStatus(value) {
   const status = String(value ?? '').toUpperCase();
   if (['UP', 'OPERATIONAL', '2'].includes(status)) return 'operational';
@@ -46,19 +51,12 @@ function numberOrNull(...values) {
   return null;
 }
 
-function normalizeUptime(monitor, period) {
-  const candidates = [
-    monitor?.uptime?.[period],
-    monitor?.uptimeRatio?.[period],
-    monitor?.uptimePercent?.[period],
-    monitor?.uptimePercentage?.[period],
-    monitor?.stats?.uptime?.[period],
-    period === '30d' ? monitor?.uptimeRatio : undefined,
-    period === '30d' ? monitor?.uptimePercentage : undefined,
-  ];
-  const value = numberOrNull(...candidates);
-  if (value === null) return null;
-  return Math.max(0, Math.min(100, value <= 1 ? value * 100 : value));
+function toIso(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = typeof value === 'number'
+    ? new Date(value < 10_000_000_000 ? value * 1000 : value)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 async function uptimeRobotGet(path) {
@@ -88,38 +86,74 @@ async function uptimeRobotGet(path) {
 async function loadStatus() {
   const monitorPayload = await uptimeRobotGet('/monitors?limit=200');
   const monitors = unwrapCollection(monitorPayload);
+  const now = new Date();
+  const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // The Free API limit is 10 requests/minute. Keep this refresh within that
+  // limit: one monitor list, up to eight per-monitor uptime requests, and one
+  // aggregate incident-log request. Cache the result for five minutes.
+  const monitorsWithStats = monitors.slice(0, MAX_PER_MONITOR_STATS);
+  const statsEntries = await Promise.all(monitorsWithStats.map(async (monitor) => {
+    const id = monitor.id ?? monitor.monitorId;
+    if (id === null || id === undefined) return [null, null];
+    try {
+      const query = new URLSearchParams({ from, to: now.toISOString() });
+      const stats = unwrapObject(await uptimeRobotGet(
+        '/monitors/' + encodeURIComponent(String(id)) + '/stats/uptime?' + query.toString()
+      ));
+      return [String(id), stats];
+    } catch {
+      return [String(id), null];
+    }
+  }));
+  const statsById = new Map(statsEntries.filter(([id]) => id !== null));
 
   const services = monitors.map((monitor) => {
     const id = String(monitor.id ?? monitor.monitorId ?? monitor.uuid ?? monitor.friendlyName ?? monitor.name);
     const name = String(monitor.friendlyName ?? monitor.name ?? monitor.url ?? 'Unnamed monitor');
-    const status = normalizeStatus(monitor.status ?? monitor.state);
+    const stats = statsById.get(id);
     return {
       id,
       name,
       description: String(monitor.url ?? monitor.description ?? 'Monitored by UptimeRobot'),
-      status,
+      status: normalizeStatus(monitor.status ?? monitor.state),
       latencyMs: numberOrNull(monitor.responseTime, monitor.averageResponseTime, monitor.response_time),
-      uptime24h: normalizeUptime(monitor, '24h'),
-      uptime7d: normalizeUptime(monitor, '7d'),
-      uptime30d: normalizeUptime(monitor, '30d'),
+      uptime24h: null,
+      uptime7d: null,
+      uptime30d: numberOrNull(stats?.uptime, monitor.uptimeRatio, monitor.uptimePercentage),
+      downtimeSeconds30d: numberOrNull(stats?.total_downtime_seconds, stats?.totalDowntimeSeconds),
+      incidentCount30d: numberOrNull(stats?.incident_count, stats?.incidentCount),
       source: 'UptimeRobot',
     };
   });
 
   let incidents = [];
   try {
-    const incidentPayload = await uptimeRobotGet('/incidents?limit=50');
-    incidents = unwrapCollection(incidentPayload).map((incident) => ({
-      id: String(incident.id ?? incident.incidentId ?? ''),
-      serviceId: String(incident.monitorId ?? incident.monitor?.id ?? ''),
-      title: String(incident.title ?? incident.name ?? 'Monitoring incident'),
-      description: String(incident.description ?? incident.reason ?? incident.message ?? ''),
-      startedAt: incident.startedAt ?? incident.started_at ?? incident.createdAt ?? incident.created_at ?? null,
-      resolvedAt: incident.resolvedAt ?? incident.resolved_at ?? incident.closedAt ?? incident.closed_at ?? null,
-    }));
+    const aggregate = unwrapObject(await uptimeRobotGet(
+      '/monitors/uptime-stats?timeFrame=DAYS_30&logLimit=50'
+    ));
+    const logs = Array.isArray(aggregate.logs) ? aggregate.logs : [];
+    incidents = logs
+      .filter((log) => ['DOWN', 'OUTAGE', '9', 'FAIL'].includes(String(log.type ?? log.status ?? '').toUpperCase()))
+      .map((log, index) => {
+        const serviceId = String(log.monitorId ?? log.monitor?.id ?? '');
+        const service = services.find((item) => item.id === serviceId);
+        const startedAt = toIso(log.datetime ?? log.startedAt ?? log.timestamp ?? log.createdAt);
+        const durationSeconds = numberOrNull(log.duration, log.durationSeconds);
+        const resolvedAt = log.resolvedAt ?? (startedAt && durationSeconds > 0
+          ? new Date(new Date(startedAt).getTime() + durationSeconds * 1000).toISOString()
+          : null);
+        return {
+          id: String(log.id ?? serviceId + '-' + startedAt + '-' + index),
+          serviceId,
+          title: String(log.title ?? (service?.name || log.monitorName || 'Monitored service') + ' experienced an outage'),
+          description: String(log.reason ?? log.description ?? 'UptimeRobot recorded a downtime event.'),
+          startedAt,
+          resolvedAt,
+        };
+      });
   } catch {
-    // Incident history is optional; monitor status remains available if this endpoint
-    // is unavailable to the current API key or account plan.
+    // Monitor health and uptime remain available if aggregate logs are unavailable.
   }
 
   const statuses = services.map((service) => service.status);
@@ -130,7 +164,7 @@ async function loadStatus() {
     : 'degraded';
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: now.toISOString(),
     overall,
     source: 'UptimeRobot',
     services,
