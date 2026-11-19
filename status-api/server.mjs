@@ -56,7 +56,6 @@ function requireServerConfiguration() {
   const missing = [];
   if (!SUPABASE_URL) missing.push('SUPABASE_URL');
   if (!SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-  if (!UPTIMEROBOT_API_KEY) missing.push('UPTIMEROBOT_API_KEY');
   if (missing.length) {
     const error = new Error('Missing required server configuration: ' + missing.join(', '));
     error.statusCode = 503;
@@ -129,7 +128,7 @@ async function loadMonitors() {
     if (!items) throw new Error('UptimeRobot returned an unexpected monitor-list response');
 
     monitors.push(...items);
-    nextUrl = payload.nextLink ? new URL(payload.nextLink, API_BASE) : null;
+    nextUrl = payload.nextLink ? new URL(payload.nextLink, API_BASE + '/') : null;
     pageCount += 1;
   }
 
