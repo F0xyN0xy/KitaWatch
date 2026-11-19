@@ -20,8 +20,9 @@ The UptimeRobot token is stored only as the `UPTIMEROBOT_API_KEY` environment va
 
 ## Deploying the API to Render
 
-Create a Node.js web service from this repository using:
+The service is configured with:
 
+- Repository: this KitaWatch repository
 - Branch: `feature/uptimerobot-status-integration` during initial testing; switch to `main` after merging.
 - Build command: `npm install --omit=dev --prefix status-api`
 - Start command: `npm start --prefix status-api`
@@ -32,14 +33,14 @@ Create a Node.js web service from this repository using:
 The service exposes:
 
 - `GET /health` — Render health check.
-- `GET /api/status` — normalized monitor status and available incident data.
+- `GET /api/status` — normalized monitor status, uptime statistics, and available incident data.
 
-The API caches successful responses in memory for 60 seconds to reduce calls to UptimeRobot. Free Render instances may sleep when idle, so the first request after inactivity can take longer. In-memory cache is not persistent and is not used as historical storage.
+The API caches successful responses in memory for five minutes. The UptimeRobot Free API limit is 10 requests/minute. A refresh uses one monitor-list request, up to eight per-monitor uptime-stat requests, and one aggregate incident-log request. Therefore, detailed 30-day statistics are retrieved for at most eight monitors per refresh; additional monitors still show their current status. The cache is not persistent and resets when a sleeping Render instance wakes.
 
 ## Uptime data limitations
 
-Current monitor states come from UptimeRobot. Uptime percentages are displayed only when the API response includes a supported uptime field. The daily sample bars from the previous GitHub Actions implementation are intentionally not fabricated; the current integration does not recreate them. Incident history is displayed when the account/API response makes it available.
+Current monitor states come from UptimeRobot. Per-monitor 30-day uptime and downtime are read from the UptimeRobot statistics endpoint. The old hourly sample bars are intentionally not fabricated. Incident entries are read from the aggregated UptimeRobot uptime-stat logs when available.
 
 ## Status page deployment
 
-GitHub Actions only validates and deploys the static `status-page/` directory. It no longer runs hourly checks or commits monitoring snapshots. The separate `status-page-check.yml` workflow continues to validate changes in pull requests.
+GitHub Actions only validates and deploys the static `status-page/` directory. It no longer runs hourly checks or commits monitoring snapshots. The separate `status-page-check.yml` workflow validates the frontend and API JavaScript in pull requests.
