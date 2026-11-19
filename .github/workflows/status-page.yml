@@ -1,8 +1,6 @@
-name: Status page monitoring
+name: Status page deployment
 
 on:
-  schedule:
-    - cron: "0 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -11,49 +9,31 @@ on:
       - ".github/workflows/status-page.yml"
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
   group: status-page
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  monitor-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Run service checks
-        run: node status-page/scripts/check.mjs
-        env:
-          KITAWATCH_API_URL: https://api.kitawatch.free.nf
-          ANIVEXA_BASE_URL: https://kitawatch-anivexa-yya5k.faable.link
-
-      - name: Commit monitoring history
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add status-page/data/status.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(status): update uptime snapshot"
-            git push
-          fi
+      - name: Validate status page JavaScript
+        run: node --check status-page/app.js
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
