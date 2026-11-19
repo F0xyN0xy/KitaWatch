@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT || 3000);
-const API_BASE = (process.env.UPTIMEROBOT_API_BASE || 'https://api.uptimerobot.com/v3').replace(/\\/+$/, '');
+const API_BASE = (process.env.UPTIMEROBOT_API_BASE || 'https://api.uptimerobot.com/v3').replace(/[/]+$/, '');
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const UPTIMEROBOT_API_KEY = process.env.UPTIMEROBOT_API_KEY || '';
