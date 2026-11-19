@@ -2,8 +2,6 @@ name: Status page deployment
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "12 * * * *"
   push:
     branches: [main]
     paths:
@@ -11,13 +9,13 @@ on:
       - ".github/workflows/status-page.yml"
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
   group: status-page
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -35,28 +33,7 @@ jobs:
           node-version: 22
 
       - name: Validate status page JavaScript
-        run: |
-          node --check status-page/app.js
-          node --check status-page/scripts/record-history.mjs
-
-      - name: Record hourly status snapshot
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        env:
-          STATUS_API_URL: https://kitawatch-status-api.onrender.com/api/status
-        run: node status-page/scripts/record-history.mjs
-
-      - name: Commit updated uptime history
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: |
-          if git diff --quiet -- status-page/data/history.json; then
-            echo "No new history changes to commit."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add status-page/data/history.json
-            git commit -m "chore(status): record uptime history"
-            git push
-          fi
+        run: node --check status-page/app.js
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
