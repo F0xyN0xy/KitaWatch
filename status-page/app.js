@@ -23,6 +23,17 @@ function formatPercent(value) {
   return Number.isFinite(value) ? value.toFixed(2) + '%' : '—';
 }
 
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
+  const totalMinutes = Math.floor(seconds / 60);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function render(data) {
   const services = Array.isArray(data.services) ? data.services : [];
   const current = data.current || {};
@@ -65,17 +76,16 @@ function render(data) {
 
   document.querySelector('#uptime').innerHTML = services.length ? services.map((service) => {
     const result = current[service.id] || service;
-    const periods = [
-      ['24 hours', result.uptime24h],
-      ['7 days', result.uptime7d],
-      ['30 days', result.uptime30d],
-    ];
+    const incidentCount = Number.isFinite(result.incidentCount30d)
+      ? result.incidentCount30d
+      : '—';
     return `<article class="uptime-card">
       <div class="uptime-heading"><strong>${esc(service.name)}</strong><span>${formatPercent(result.uptime30d)} <small>30-day uptime</small></span></div>
       <div class="uptime-periods">
-        ${periods.map(([label, value]) => `<span>${label} <strong>${formatPercent(value)}</strong></span>`).join('')}
+        <span>Downtime <strong>${formatDuration(result.downtimeSeconds30d)}</strong></span>
+        <span>Incidents <strong>${esc(incidentCount)}</strong></span>
       </div>
-      <p class="service-description">Uptime figures are supplied by UptimeRobot. Daily history bars are not currently available through this integration.</p>
+      <p class="service-description">30-day statistics are retrieved directly from UptimeRobot. The free API request limit means detailed uptime statistics are requested for up to eight monitors per refresh.</p>
     </article>`;
   }).join('') : '<p class="empty">Uptime statistics are unavailable.</p>';
 
