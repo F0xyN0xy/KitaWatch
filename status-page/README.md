@@ -1,46 +1,34 @@
 # KitaWatch Status Page
 
-The status page is a static GitHub Pages frontend. Live monitoring data is retrieved from the separate Node.js API in `status-api/`, which reads monitor information from UptimeRobot API v3.
+The status page is a static GitHub Pages frontend. Current service health is loaded from the KitaWatch Status API hosted on Render. A scheduled GitHub Actions job stores one hourly snapshot so the page can build a 30-day history without inventing past results.
 
 ## Architecture
 
-```text
-UptimeRobot monitors
-        |
-        | API v3 (read-only token)
-        v
-KitaWatch Status API (Render)
-        |
-        | cached JSON
-        v
-KitaWatch Status Page (GitHub Pages)
-```
+- Current service state: KitaWatch Status API.
+- Historical bars: hourly snapshots stored in `status-page/data/history.json`.
+- Frontend: static GitHub Pages site.
 
-The UptimeRobot token is stored only as the `UPTIMEROBOT_API_KEY` environment variable on the Render service. It must never be added to this repository or frontend code.
+The API credential stays in the Render environment as `UPTIMEROBOT_API_KEY`. It must never be committed to this repository or exposed in frontend code.
 
-## Deploying the API to Render
-
-The service is configured with:
-
-- Repository: this KitaWatch repository
-- Branch: `feature/uptimerobot-status-integration` during initial testing; switch to `main` after merging.
-- Build command: `npm install --omit=dev --prefix status-api`
-- Start command: `npm start --prefix status-api`
-- Region: Frankfurt
-- Plan: Free
-- Environment variable: `UPTIMEROBOT_API_KEY` = a UptimeRobot read-only API key
-
-The service exposes:
+## Status API
 
 - `GET /health` — Render health check.
-- `GET /api/status` — normalized monitor status, uptime statistics, and available incident data.
+- `GET /api/status` — normalized current monitor status, uptime statistics, and available incident data.
 
-The API caches successful responses in memory for five minutes. The UptimeRobot Free API limit is 10 requests/minute. A refresh uses one monitor-list request, up to eight per-monitor uptime-stat requests, and one aggregate incident-log request. Therefore, detailed 30-day statistics are retrieved for at most eight monitors per refresh; additional monitors still show their current status. The cache is not persistent and resets when a sleeping Render instance wakes.
+The API caches successful responses for five minutes. The free API limit is 10 requests/minute, so detailed per-monitor statistics are intentionally limited. See the `status-api/` directory for implementation details.
 
-## Uptime data limitations
+## Uptime history
 
-Current monitor states come from UptimeRobot. Per-monitor 30-day uptime and downtime are read from the UptimeRobot statistics endpoint. The old hourly sample bars are intentionally not fabricated. Incident entries are read from the aggregated UptimeRobot uptime-stat logs when available.
+The scheduled workflow runs hourly, reads the current status API response, and appends a timestamped snapshot to `status-page/data/history.json`. It retains approximately 30 days of samples (up to 750 records).
 
-## Status page deployment
+The 30 daily bars summarize the samples actually recorded for each calendar day:
+- Green: all recorded samples were operational.
+- Yellow: at least one recorded sample was degraded and none were down.
+- Red: at least one recorded sample was down.
+- Gray: no samples were recorded.
 
-GitHub Actions only validates and deploys the static `status-page/` directory. It no longer runs hourly checks or commits monitoring snapshots. The separate `status-page-check.yml` workflow validates the frontend and API JavaScript in pull requests.
+The 30-day percentage is calculated from recorded hourly snapshots, not presented as a full historical uptime guarantee. History begins accumulating after this workflow is enabled; older days without stored snapshots remain gray.
+
+## Deployment
+
+The same workflow records history on its hourly schedule and deploys the static site to GitHub Pages. Manual workflow dispatch also records a snapshot and deploys. Normal pushes to `status-page/**` validate and deploy the site.
