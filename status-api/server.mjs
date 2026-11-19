@@ -185,11 +185,42 @@ async function collectSnapshot() {
   return collectionInFlight;
 }
 
+async function loadLegacyStatus() {
+  const monitors = await loadMonitors();
+  const services = monitors.map((monitor) => ({
+    ...monitor,
+    uptime30d: null,
+    downtimeSeconds30d: null,
+    incidentCount30d: null,
+  }));
+  const statuses = services.map((service) => service.status);
+  const overall = statuses.length === 0 ? 'unknown'
+    : statuses.every((status) => status === 'operational') ? 'operational'
+    : statuses.some((status) => status === 'outage') ? 'outage'
+    : statuses.some((status) => status === 'degraded') ? 'degraded'
+    : 'unknown';
+
+  return {
+    generatedAt: new Date().toISOString(),
+    overall,
+    services,
+    current: Object.fromEntries(services.map((service) => [service.id, {
+      status: service.status,
+      latencyMs: service.latencyMs,
+    }])),
+    dailyHistory: {},
+    incidents: [],
+  };
+}
+
 async function getStatus() {
   if (cachedPayload && Date.now() - cachedAt < STATUS_CACHE_TTL_MS) return cachedPayload;
 
   if (!refreshInFlight) {
-    refreshInFlight = supabaseRpc('get_status_page_data', {})
+    const statusRequest = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+      ? supabaseRpc('get_status_page_data', {})
+      : loadLegacyStatus();
+    refreshInFlight = statusRequest
       .then((payload) => {
         cachedPayload = unwrapStatusPayload(payload);
         cachedAt = Date.now();
