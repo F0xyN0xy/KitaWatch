@@ -1,24 +1,45 @@
 # KitaWatch Status Page
 
-A static, independently hosted status page. The GitHub Actions workflow checks the public services hourly, stores a rolling 30-day history in `data/status.json`, tracks incidents, and deploys this directory to GitHub Pages.
+The status page is a static GitHub Pages frontend. Live monitoring data is retrieved from the separate Node.js API in `status-api/`, which reads monitor information from UptimeRobot API v3.
 
-## Monitored checks
+## Architecture
 
-- **KitaWatch API:** `GET /health` must return HTTP 200 and `{"status":"healthy"}`.
-- **Kuhi adapter:** `GET /providers/unified/status` must report that the Kuhi adapter is registered and configured.
-- **Anivexa:** `GET /` must return HTTP 200 with a valid JSON object that does not contain an `error` field. This is a process-reachability check, not a test of every streaming provider.
+```text
+UptimeRobot monitors
+        |
+        | API v3 (read-only token)
+        v
+KitaWatch Status API (Render)
+        |
+        | cached JSON
+        v
+KitaWatch Status Page (GitHub Pages)
+```
 
-The catalogue/episode endpoints can fan out to external scrapers and take longer than a health check. The status page intentionally does not make repeated watch/extraction requests.
+The UptimeRobot token is stored only as the `UPTIMEROBOT_API_KEY` environment variable on the Render service. It must never be added to this repository or frontend code.
 
-## Uptime calculation and limitations
+## Deploying the API to Render
 
-Checks run once per hour. The uptime percentages are calculated from recorded samples, so they are approximate and have hourly resolution. Daily history bars summarize the samples recorded for each calendar day: red takes precedence over yellow if a day contains both outage and degraded samples. Gray means no sample was recorded for that day. GitHub-hosted runner delays, skipped scheduled workflows, and the GitHub Pages deployment itself can affect freshness. This is not an external, independent monitoring provider.
+Create a Node.js web service from this repository using:
 
-An incident is opened when a service transitions from operational to degraded/outage and resolved when the next successful check returns it to operational. Initial state has no incident because there is no prior sample to compare.
+- Branch: `feature/uptimerobot-status-integration` during initial testing; switch to `main` after merging.
+- Build command: `npm install --omit=dev --prefix status-api`
+- Start command: `npm start --prefix status-api`
+- Region: Frankfurt
+- Plan: Free
+- Environment variable: `UPTIMEROBOT_API_KEY` = a UptimeRobot read-only API key
 
-## Deploy
+The service exposes:
 
-1. Merge the status-page branch into `main`.
-2. In GitHub, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
-3. Run **Actions → Status page monitoring → Run workflow** once, or wait for the hourly schedule.
-4. The workflow publishes the `status-page/` directory.
+- `GET /health` — Render health check.
+- `GET /api/status` — normalized monitor status and available incident data.
+
+The API caches successful responses in memory for 60 seconds to reduce calls to UptimeRobot. Free Render instances may sleep when idle, so the first request after inactivity can take longer. In-memory cache is not persistent and is not used as historical storage.
+
+## Uptime data limitations
+
+Current monitor states come from UptimeRobot. Uptime percentages are displayed only when the API response includes a supported uptime field. The daily sample bars from the previous GitHub Actions implementation are intentionally not fabricated; the current integration does not recreate them. Incident history is displayed when the account/API response makes it available.
+
+## Status page deployment
+
+GitHub Actions only validates and deploys the static `status-page/` directory. It no longer runs hourly checks or commits monitoring snapshots. The separate `status-page-check.yml` workflow continues to validate changes in pull requests.
