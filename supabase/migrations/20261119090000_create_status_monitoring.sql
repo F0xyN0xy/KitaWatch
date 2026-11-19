@@ -190,7 +190,7 @@ as $$
       c.monitor_id,
       c.monitor_name,
       c.description,
-      c.status,
+      case when c.sampled_at < now() - interval '15 minutes' then 'unknown' else c.status end as status,
       c.response_time_ms,
       c.sampled_at,
       case
@@ -260,7 +260,7 @@ as $$
         when bool_or(c.status = 'degraded') then 'degraded'
         else 'unknown'
       end
-      from public.status_monitor_current as c
+      from service_rows as c
     ),
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
