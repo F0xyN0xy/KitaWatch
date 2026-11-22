@@ -1,8 +1,4 @@
 import { api } from './api';
-import { anikage } from './anikage';
-import { consumet } from './consumet';
-import { animepahe } from './animepahe';
-import { anivexa } from './anivexa';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 export interface ProviderStatus {
@@ -11,93 +7,52 @@ export interface ProviderStatus {
   detail: string;
 }
 
-const guard = (name: string, p: Promise<ProviderStatus>): Promise<ProviderStatus> =>
-  p.catch(
-    (e): ProviderStatus => ({
-      name,
-      status: 'error',
-      detail: e instanceof Error ? e.message : 'probe failed',
-    }),
-  );
-
-/** Probe every backend for one anime. */
+/** Probe playback providers through the KitaWatch API, never from the WebView. */
 export async function checkProviders(
   animeId: number | string,
-  title: string,
+  _title: string,
   episode = 1,
 ): Promise<ProviderStatus[]> {
-  const s = useSettingsStore.getState();
-  const titleQ = title?.trim() || String(animeId);
+  const settings = useSettingsStore.getState();
+  const response = await api.watch(animeId, episode, 'sub', settings.enableAnivexa);
+  const statuses: ProviderStatus[] = [];
+  const providers = response.providers ?? {};
 
-  const jobs: Promise<ProviderStatus>[] = [
-    guard('Kuhi (native race)', (async () => {
-      const r = await api.extract(animeId, episode, 'sub');
-      return {
-        name: 'Kuhi (native race)',
-        status: r.streams?.length ? 'ok' : 'empty',
-        detail: r.streams?.length ? `${r.streams.length} stream(s) for ep ${episode}` : 'no streams returned',
-      };
-    })()),
-  ];
+  const kuhi = providers.kuhi as
+    | { status?: string; streamCount?: number; provider?: string; error?: string }
+    | undefined;
+  if (kuhi) {
+    statuses.push({
+      name: 'Kuhi (native race)',
+      status: kuhi.status === 'success' ? 'ok' : kuhi.status === 'error' ? 'error' : 'empty',
+      detail: kuhi.error
+        ? kuhi.error
+        : kuhi.streamCount
+          ? `${kuhi.streamCount} stream(s)${kuhi.provider ? ` via ${kuhi.provider}` : ''} for ep ${episode}`
+          : 'no streams returned',
+    });
+  }
 
-  if (s.enableAnivexa) {
-    jobs.push(guard('Anivexa (15 providers)', (async () => {
-      const j = await anivexa.episodes(animeId);
-      const providers = (j as Record<string, unknown>)?.providers ?? j;
-      const entries =
-        providers && typeof providers === 'object'
-          ? Object.entries(providers as Record<string, unknown>)
-          : [];
-      const matched = entries.filter(([, v]) => {
-        if (!v || typeof v !== 'object') return false;
-        const eps = (v as Record<string, unknown>).episodes;
-        if (Array.isArray(eps)) return eps.length > 0;
-        if (eps && typeof eps === 'object') {
-          const lists = eps as Record<string, unknown>;
-          return Object.values(lists).some((l) => Array.isArray(l) && l.length > 0);
-        }
-        return false;
+  const anivexa = providers.anivexa;
+  if (anivexa && typeof anivexa === 'object') {
+    for (const [provider, raw] of Object.entries(anivexa as Record<string, unknown>)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const result = raw as { status?: string; streamCount?: number; error?: string };
+      statuses.push({
+        name: `Anivexa: ${provider}`,
+        status: result.status === 'success' ? 'ok' : result.status === 'error' ? 'error' : 'empty',
+        detail: result.error ?? `${result.streamCount ?? 0} playable stream(s)`,
       });
-      return {
-        name: 'Anivexa (15 providers)',
-        status: matched.length ? 'ok' : 'empty',
-        detail: matched.length ? matched.map(([k]) => k).join(', ') : 'no provider matched',
-      };
-    })()));
+    }
   }
 
-  jobs.push(guard('AniKage', (async () => {
-    const results = await anikage.search(titleQ);
-    const exact = results.find((r) => r.anilistId === Number(animeId));
-    const first = exact ?? results[0];
-    return {
-      name: 'AniKage',
-      status: first ? 'ok' : 'empty',
-      detail: first
-        ? `${exact ? 'exact ID match' : 'fuzzy match'}: ${first.title?.english ?? first.title?.romaji ?? first.slug}`
-        : 'no results',
-    };
-  })()));
-
-  if (s.enableConsumetFallback) {
-    jobs.push(guard('Consumet (gogoanime)', (async () => {
-      const results = await consumet.search(titleQ);
-      return {
-        name: 'Consumet (gogoanime)',
-        status: results.length ? 'ok' : 'empty',
-        detail: results.length ? `${results.length} result(s)` : 'no results',
-      };
-    })()));
+  if (statuses.length === 0) {
+    return [{
+      name: 'KitaWatch API',
+      status: 'empty',
+      detail: response.errors?.join('; ') || 'No provider diagnostics were returned.',
+    }];
   }
 
-  jobs.push(guard('animepahe', (async () => {
-    const results = await animepahe.search(titleQ);
-    return {
-      name: 'animepahe',
-      status: results.length ? 'ok' : 'empty',
-      detail: results.length ? `${results.length} result(s)` : 'no results',
-    };
-  })()));
-
-  return Promise.all(jobs);
+  return statuses;
 }
