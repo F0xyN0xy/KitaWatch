@@ -1,16 +1,10 @@
 import type { AnimeInfo, AnimeSummary } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
-import { DEFAULT_REDIRECT } from '@/stores/authStore';
 
 const API_URL = 'https://graphql.anilist.co';
 /** Public OAuth client ID — identifies the app; users still log in with THEIR account. */
 export const ANILIST_CLIENT_ID = '34664';
 export const OAUTH_AUTHORIZE = 'https://anilist.co/api/v2/oauth/authorize';
-/** Redirect URI — must exactly match the AniList client's registered URL. */
-export function getRedirectUri(): string {
-  return DEFAULT_REDIRECT;
-}
-
 export class AniListError extends Error {}
 
 /** Strip the HTML tags AniList puts in descriptions. */
@@ -367,9 +361,10 @@ export const anilist = {
 
 /** Open the AniList authorize page in the system browser. */
 export async function startAniListOAuth(): Promise<void> {
+  // Desktop apps cannot keep a client secret confidential. AniList recommends
+  // the implicit grant for public clients; the token returns in the redirect fragment.
   const url =
-    `${OAUTH_AUTHORIZE}?client_id=${encodeURIComponent(ANILIST_CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(getRedirectUri())}&response_type=code`;
+    `${OAUTH_AUTHORIZE}?client_id=${encodeURIComponent(ANILIST_CLIENT_ID)}&response_type=token`;
   try {
     const { openUrl } = await import('@tauri-apps/plugin-opener');
     await openUrl(url);
