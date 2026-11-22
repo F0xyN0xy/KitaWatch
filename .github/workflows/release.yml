@@ -91,7 +91,7 @@ jobs:
           prerelease: false
 
       - name: Generate release notes from merged changes
-        if: matrix.platform == 'ubuntu-latest'
+        if: ${{ matrix.platform == 'ubuntu-latest' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -101,13 +101,10 @@ jobs:
           set -euo pipefail
 
           previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
-          if [ -n "$previous_tag" ]; then
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" \
-              -f previous_tag_name="$previous_tag" --jq .body)"
+          if [[ -n "$previous_tag" ]]; then
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" -f tag_name="$RELEASE_TAG" -f previous_tag_name="$previous_tag" --jq .body)"
           else
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" --jq .body)"
+            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body)"
           fi
 
           release_id="$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)"
