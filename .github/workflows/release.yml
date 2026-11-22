@@ -50,10 +50,9 @@ jobs:
           VITE_HCAPTCHA_SITE_KEY: ${{ secrets.VITE_HCAPTCHA_SITE_KEY }}
         run: |
           # Vite reads this file when building the frontend.
-          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_HCAPTCHA_SITE_KEY=%s\n' \
+          printf 'VITE_SUPABASE_URL=%s\\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\\nVITE_HCAPTCHA_SITE_KEY=%s\\n' \\
             "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" "$VITE_HCAPTCHA_SITE_KEY" > .env
 
-      
       - name: Validate build environment
         shell: bash
         run: |
@@ -62,96 +61,9 @@ jobs:
             exit 1
           }
 
-          if grep -q '^VITE_SUPABASE_URL=
-
-      - name: Install Anivexa deps
-        run: npm install --prefix api/anivexa
-
-      - name: Build sidecars
-        run: npm run build:sidecars
-        env:
-          SKIP_ANIVEXA: ${{ matrix.platform == 'ubuntu-latest' && '1' || '0' }}
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'KitaWatch ${{ github.ref_name }}'
-          releaseDraft: false
-          prerelease: false
-
-      - name: Generate release notes from merged changes
-        if: matrix.platform == 'ubuntu-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
-          if [ -n "$previous_tag" ]; then
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" \
-              -f previous_tag_name="$previous_tag" --jq .body)"
-          else
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" --jq .body)"
-          fi
-
-          release_id="$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)"
-          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -f body="$notes"
- .env ||
-             grep -q '^VITE_SUPABASE_PUBLISHABLE_KEY=
-
-      - name: Install Anivexa deps
-        run: npm install --prefix api/anivexa
-
-      - name: Build sidecars
-        run: npm run build:sidecars
-        env:
-          SKIP_ANIVEXA: ${{ matrix.platform == 'ubuntu-latest' && '1' || '0' }}
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'KitaWatch ${{ github.ref_name }}'
-          releaseDraft: false
-          prerelease: false
-
-      - name: Generate release notes from merged changes
-        if: matrix.platform == 'ubuntu-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
-          if [ -n "$previous_tag" ]; then
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" \
-              -f previous_tag_name="$previous_tag" --jq .body)"
-          else
-            notes="$(gh api "repos/$GH_REPO/releases/generate-notes" \
-              -f tag_name="$RELEASE_TAG" --jq .body)"
-          fi
-
-          release_id="$(gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq .id)"
-          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -f body="$notes"
- .env; then
+          if grep -q '^VITE_SUPABASE_URL=$' .env ||
+             grep -q '^VITE_SUPABASE_PUBLISHABLE_KEY=$' .env ||
+             grep -q '^VITE_HCAPTCHA_SITE_KEY=$' .env; then
             echo "::error::Required frontend configuration is empty"
             exit 1
           fi
