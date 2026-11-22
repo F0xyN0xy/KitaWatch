@@ -1,4 +1,9 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python.analysis.ignore": ["api/anime-api", "api/anivexa", "proxy"]
+    "python.analysis.ignore": [
+        "api/anime-api",
+        "api/anivexa",
+        "proxy"
+    ],
+    "python.terminal.useEnvFile": true
 }
