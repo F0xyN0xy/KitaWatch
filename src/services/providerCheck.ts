@@ -14,7 +14,7 @@ export async function checkProviders(
   episode = 1,
 ): Promise<ProviderStatus[]> {
   const settings = useSettingsStore.getState();
-  let response;
+  let response: Awaited<ReturnType<typeof api.watch>>;
   try {
     response = await api.watch(animeId, episode, 'sub', settings.enableAnivexa);
   } catch (error) {
