@@ -42,13 +42,15 @@ async function handleAuthUrl(rawUrl: string) {
     return;
   }
 
-  const provider = url.searchParams.get('provider');
-  const hasCode = Boolean(url.searchParams.get('code'));
+  const provider = url.searchParams.get('provider') ?? 'anilist';
+  const code = url.searchParams.get('code');
+  const token = new URLSearchParams(url.hash.replace(/^#/, '')).get('access_token');
   console.info('[kitawatch][oauth] Deep-link received', {
     protocol: url.protocol,
     host: url.hostname,
-    provider: provider ?? '(missing)',
-    hasCode,
+    provider,
+    hasCode: Boolean(code),
+    hasToken: Boolean(token),
     queryKeys: Array.from(url.searchParams.keys()),
   });
 
@@ -56,39 +58,46 @@ async function handleAuthUrl(rawUrl: string) {
     console.warn('[kitawatch][oauth] Ignored a deep link with an unexpected scheme or host.');
     return;
   }
-  const code = url.searchParams.get('code');
-  if (!code) {
-    console.warn('[kitawatch][oauth] Callback has no authorization code.');
+  if (provider === 'discord' && !code) {
+    console.warn('[kitawatch][oauth] Discord callback has no authorization code.');
+    return;
+  }
+  if (provider === 'anilist' && !token && !code) {
+    console.warn('[kitawatch][oauth] AniList callback has neither an access token nor a legacy code.');
+    return;
+  }
+  if (provider !== 'discord' && provider !== 'anilist') {
+    console.warn('[kitawatch][oauth] Ignored a callback for an unknown provider.');
     return;
   }
 
-  if (processedAuthCodes.has(code)) {
-    console.info('[kitawatch][oauth] Ignored a duplicate callback code.');
+  // This in-memory key prevents the native and plugin listeners processing a
+  // callback twice. Never log the token or authorization code.
+  const callbackCredential = token ?? code!;
+  if (processedAuthCodes.has(callbackCredential)) {
+    console.info('[kitawatch][oauth] Ignored a duplicate callback.');
     return;
   }
-  processedAuthCodes.add(code);
+  processedAuthCodes.add(callbackCredential);
 
   try {
     if (provider === 'discord') {
       console.info('[kitawatch][oauth] Starting Discord code exchange.');
       const completed = await completeDiscordOAuth(rawUrl);
       console.info('[kitawatch][oauth] Discord code exchange finished', { completed });
-      if (!completed) {
-        console.warn('[kitawatch][oauth] Discord callback parser rejected the callback.');
-      }
+      if (!completed) console.warn('[kitawatch][oauth] Discord callback parser rejected the callback.');
       return;
     }
-    console.info('[kitawatch][oauth] Starting AniList code exchange.');
-    await completeLogin(`kitawatch://auth?code=${code}`);
-    console.info('[kitawatch][oauth] AniList code exchange finished.');
+
+    console.info('[kitawatch][oauth] Completing AniList token login.');
+    await completeLogin(token ? rawUrl : `kitawatch://auth?code=${encodeURIComponent(code!)}`);
+    console.info('[kitawatch][oauth] AniList login finished.');
   } catch (error) {
-    // Permit a retry if the exchange failed; successful one-time codes stay deduplicated.
-    processedAuthCodes.delete(code);
-    // Log the error type only: provider errors can contain sensitive callback data.
+    processedAuthCodes.delete(callbackCredential);
     console.error(
       provider === 'discord'
         ? '[kitawatch][oauth] Discord code exchange failed.'
-        : '[kitawatch][oauth] AniList code exchange failed.',
+        : '[kitawatch][oauth] AniList login failed.',
       { errorType: error instanceof Error ? error.name : typeof error },
     );
   }

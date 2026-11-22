@@ -35,12 +35,8 @@ async function finishWithToken(token: string): Promise<boolean> {
   return true;
 }
 
-/** Complete the OAuth handshake.
- *  Accepts either:
- *  - a kitawatch://auth?code=... deep-link callback URL, or
- *  - a raw access token (AniList's "auth pin" flow: redirect URL
- *    https://anilist.co/api/v2/oauth/pin shows the token on a page).
- *  The code exchange runs in Rust and reads client credentials from .env. */
+/** Complete AniList login from an implicit-grant callback, an auth-pin token,
+ *  or a legacy authorization-code callback. */
 export async function completeLogin(raw: string): Promise<boolean> {
   const input = raw.trim();
   if (!input) {
@@ -66,14 +62,21 @@ export async function completeLogin(raw: string): Promise<boolean> {
     }
   }
 
-  // Case 1b: pasted URL containing access_token= (some pin flows put it in the URL)
+  // Case 1b: AniList returns implicit-grant tokens in the URL fragment.
   if (input.includes('access_token=')) {
     try {
-      const u = new URL(input.includes('://') ? input : `https://${input}`);
-      const t = u.searchParams.get('access_token');
-      if (t) {
+      const u = new URL(input);
+      const allowedHosts = ['auth', 'kitawatch.free.nf', 'anilist.co', 'www.anilist.co'];
+      if (!['https:', 'kitawatch:'].includes(u.protocol) || !allowedHosts.includes(u.hostname)) {
+        notify('That is not a trusted AniList sign-in callback');
+        return false;
+      }
+      const token =
+        u.searchParams.get('access_token') ??
+        new URLSearchParams(u.hash.replace(/^#/, '')).get('access_token');
+      if (token) {
         try {
-          return await finishWithToken(t);
+          return await finishWithToken(token);
         } catch (e) {
           notify(e instanceof Error ? `That token didn't work: ${e.message}` : 'Token rejected');
           return false;
@@ -89,7 +92,7 @@ export async function completeLogin(raw: string): Promise<boolean> {
   // Case 2: kitawatch://auth?code=... callback URL
   // Whitelist: only allow http(s) URLs and the app's deep-link scheme
   const allowedProtocols = ['http:', 'https:', 'kitawatch:'];
-  const allowedHosts = ['auth', 'anilist.co', 'graphql.anilist.co', 'www.anilist.co'];
+  const allowedHosts = ['auth', 'kitawatch.free.nf', 'anilist.co', 'graphql.anilist.co', 'www.anilist.co'];
   let url: URL;
   try {
     url = new URL(input);

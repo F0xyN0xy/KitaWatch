@@ -58,12 +58,6 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // Ensure .env is loaded from resource dir early (Linux needs this for AniList secret)
-            if let Ok(res_dir) = app.path().resource_dir() {
-                config::load_with_resource_dir(&res_dir);
-            } else {
-                config::load();
-            }
             // Discord IPC can take time to connect when Discord is closed. Keep it
             // off the native setup path so it cannot delay the first app window.
             std::thread::spawn(|| {
