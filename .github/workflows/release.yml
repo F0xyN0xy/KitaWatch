@@ -50,7 +50,7 @@ jobs:
           VITE_HCAPTCHA_SITE_KEY: ${{ secrets.VITE_HCAPTCHA_SITE_KEY }}
         run: |
           # Vite reads this file when building the frontend.
-          printf 'VITE_SUPABASE_URL=%s\\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\\nVITE_HCAPTCHA_SITE_KEY=%s\\n' \\
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_HCAPTCHA_SITE_KEY=%s\n' \
             "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" "$VITE_HCAPTCHA_SITE_KEY" > .env
 
       - name: Validate build environment

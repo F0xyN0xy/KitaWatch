@@ -380,10 +380,9 @@ export async function startAniListOAuth(): Promise<void> {
 }
 
 /**
- * Trade the deep-link callback code for an access token.
- * Desktop: the Rust command does it (secret stays out of frontend code).
- * Environment variables (.env) win; the values stored in Settings are the
- * fallback so the installed app works where no .env exists.
+ * Legacy authorization-code exchange for callbacks created by older KitaWatch
+ * builds. Current desktop login uses AniList's implicit grant above and does
+ * not require this command or a runtime .env file.
  */
 export async function exchangeAuthCode(code: string): Promise<string> {
   try {
