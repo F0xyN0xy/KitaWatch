@@ -20,7 +20,7 @@ const API_BASE_URL = (
 )?.trim().replace(/\/+$/, '') || 'https://api.kitawatch.free.nf';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
-const WATCH_TIMEOUT_MS = 25_000;
+const WATCH_TIMEOUT_MS = 45_000;
 
 interface UnifiedWatchResponse {
   anilistId: number;
