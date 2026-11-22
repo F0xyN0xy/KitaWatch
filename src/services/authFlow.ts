@@ -51,7 +51,7 @@ export async function completeLogin(raw: string): Promise<boolean> {
   // Case 1: raw access token (paste from the anilist.co pin page)
   if (!input.includes('://') && !input.includes('=')) {
     const token = input.replace(/["'\s]/g, '');
-    if (!/^[A-Za-z0-9]{100,}$/.test(token)) {
+    if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
       notify('That does not look like an AniList token — copy the long hex string from the pin page');
       markLoginPending(false);
       return false;

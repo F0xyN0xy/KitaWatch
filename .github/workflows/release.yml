@@ -49,7 +49,7 @@ jobs:
           ANILIST_CLIENT_SECRET: ${{ secrets.ANILIST_CLIENT_SECRET }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
+          VITE_HCAPTCHA_SITE_KEY: ${{ secrets.VITE_HCAPTCHA_SITE_KEY }}
         run: |
           # Vite reads this file when building the frontend.
           printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_HCAPTCHA_SITE_KEY=%s\n' \
@@ -58,6 +58,22 @@ jobs:
           # Rust-side configuration.
           printf 'ANILIST_CLIENT_ID=%s\nANILIST_CLIENT_SECRET=%s\nANILIST_REDIRECT_URI=https://kitawatch.free.nf/?oauth_callback=anilist\n' \
             "$ANILIST_CLIENT_ID" "$ANILIST_CLIENT_SECRET" > src-tauri/.env
+      
+      - name: Validate build environment
+        shell: bash
+        run: |
+          test -s src-tauri/.env || {
+            echo "::error::src-tauri/.env was not generated"
+            exit 1
+          }
+
+          if grep -q '^ANILIST_CLIENT_ID=$' src-tauri/.env ||
+             grep -q '^ANILIST_CLIENT_SECRET=$' src-tauri/.env; then
+            echo "::error::AniList credentials are empty"
+            exit 1
+          fi
+
+          echo "AniList build configuration generated successfully."
 
       - name: Install Anivexa deps
         run: npm install --prefix api/anivexa
