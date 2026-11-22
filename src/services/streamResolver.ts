@@ -193,6 +193,15 @@ export async function resolveStreams(
   }
 
   const value = await resolveStreamsInner(animeId, episode, audio, title, isAdult);
-  streamCache.set(key, { at: Date.now(), value });
+
+  // Cache only successful discovery results. Empty results are often transient
+  // (providers can time out or recover on a later request); caching them for
+  // ten minutes made F5 appear to "fix" playback by clearing the in-memory cache.
+  if (value.streams.length > 0) {
+    streamCache.set(key, { at: Date.now(), value });
+  } else {
+    streamCache.delete(key);
+  }
+
   return value;
 }
