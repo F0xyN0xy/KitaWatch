@@ -14,7 +14,16 @@ export async function checkProviders(
   episode = 1,
 ): Promise<ProviderStatus[]> {
   const settings = useSettingsStore.getState();
-  const response = await api.watch(animeId, episode, 'sub', settings.enableAnivexa);
+  let response;
+  try {
+    response = await api.watch(animeId, episode, 'sub', settings.enableAnivexa);
+  } catch (error) {
+    return [{
+      name: 'KitaWatch API',
+      status: 'error',
+      detail: error instanceof Error ? error.message : 'Provider check failed',
+    }];
+  }
   const statuses: ProviderStatus[] = [];
   const providers = response.providers ?? {};
 
