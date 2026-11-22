@@ -37,9 +37,6 @@ jobs:
       - name: Fetch Kuhi API (vendored fork)
         run: npm run setup:api
 
-      - name: Write placeholder .env (cargo check validates bundle resources)
-        run: printf 'ANILIST_CLIENT_ID=0\nANILIST_CLIENT_SECRET=ci\nANILIST_REDIRECT_URI=kitawatch://auth\n' > src-tauri/.env
-
       - name: Build sidecars
         run: npm run build:sidecars
 
