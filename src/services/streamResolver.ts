@@ -23,8 +23,10 @@ const errMsg = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 /** Normalize provider names for saved provider preferences. */
-export function providerPreferenceKey(server?: string): string {
-  const raw = (server ?? '').trim().toLowerCase();
+export function providerPreferenceKey(provider?: string, server?: string): string {
+  // Prefer the adapter identity when the unified API supplies it. Fall back
+  // to the historical server parsing for older API responses and saved data.
+  const raw = (provider || server || '').trim().toLowerCase();
   if (!raw) return '';
   const withoutAggregator = raw.startsWith('anivexa:')
     ? raw.slice('anivexa:'.length)
@@ -40,7 +42,7 @@ function prioritize(streams: StreamSource[]): StreamSource[] {
   const rank = (stream: StreamSource) => {
     if (stream.verified === false) return 999;
 
-    const provider = providerPreferenceKey(stream.server);
+    const provider = providerPreferenceKey(stream.provider, stream.server);
     const preferred = providerPreferenceKey(
       stream.audio === 'dub'
         ? settings.preferredDubProvider
@@ -48,9 +50,12 @@ function prioritize(streams: StreamSource[]): StreamSource[] {
     );
     const matchesPreferred = Boolean(preferred) && provider === preferred;
     const server = (stream.server ?? '').toLowerCase();
-    const candidates = server.startsWith('anivexa:')
-      ? [server, server.slice('anivexa:'.length), 'anivexa']
-      : [server];
+    const adapter = (stream.provider ?? '').toLowerCase();
+    const candidates = [
+      adapter,
+      server,
+      ...(server.startsWith('anivexa:') ? [server.slice('anivexa:'.length), 'anivexa'] : []),
+    ].filter(Boolean);
 
     let best = matchesPreferred ? -1 : 99;
     for (const candidate of candidates) {
