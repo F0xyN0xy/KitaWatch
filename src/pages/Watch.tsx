@@ -249,10 +249,13 @@ export default function Watch({ id, episode }: WatchProps) {
     const key = sourceKey(s);
     const providerKey = providerPreferenceKey(s.provider, s.server);
     const savedProvider = audio === 'dub' ? preferredDubProvider : preferredSubProvider;
-    const isPreferred = Boolean(providerKey) && providerPreferenceKey(savedProvider) === providerKey;
+    const savedProviderKey = providerPreferenceKey(savedProvider);
+    const legacyServerKey = providerPreferenceKey(undefined, s.server);
+    const isPreferred = Boolean(savedProviderKey) &&
+      (savedProviderKey === providerKey || savedProviderKey === legacyServerKey);
     const serverLabel = (s.server ?? '').replace(/^anivexa:/i, '');
     const providerLabel = s.provider
-      ? s.provider.replace(/[-_]/g, ' ').replace(/\\b[a-z]/g, (letter) => letter.toUpperCase())
+      ? s.provider.charAt(0).toUpperCase() + s.provider.slice(1)
       : '';
     const showProvider = Boolean(providerLabel) &&
       providerKey !== providerPreferenceKey(undefined, s.server);
