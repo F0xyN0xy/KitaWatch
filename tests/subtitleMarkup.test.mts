@@ -22,3 +22,17 @@ test('keeps ruby subtitle formatting and leaves ordinary angle-bracket text alon
     '<ruby>漢<rt>かん</rt></ruby> < 3',
   );
 });
+
+test('decodes HTML-escaped supported formatting tags in subtitle cues', () => {
+  assert.equal(
+    sanitizeSubtitleMarkup('&lt;i&gt;Italic&lt;/i&gt; and &amp;lt;b&amp;gt;bold&amp;lt;/b&amp;gt;'),
+    '<i>Italic</i> and <b>bold</b>',
+  );
+});
+
+test('decodes numeric formatting-tag entities but leaves unrelated entities alone', () => {
+  assert.equal(
+    sanitizeSubtitleMarkup('&#60;u&#62;underlined&#60;/u&#62; &lt;3'),
+    '<u>underlined</u> &lt;3',
+  );
+});
