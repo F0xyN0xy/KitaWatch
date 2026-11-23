@@ -27,8 +27,21 @@ function sendJson(response, statusCode, payload, extraHeaders = {}) {
 }
 
 function unwrapStatusPayload(payload) {
-  if (payload && typeof payload === 'object' && !Array.isArray(payload)) return payload;
-  throw new Error('Supabase returned an invalid status payload');
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Supabase returned an invalid status payload');
+  }
+
+  // Monitor URLs are private configuration details. Never expose the URL
+  // stored in historical database rows through the public status endpoint.
+  return {
+    ...payload,
+    services: Array.isArray(payload.services)
+      ? payload.services.map((service) => ({
+          ...service,
+          description: 'Availability and response-time monitoring.',
+        }))
+      : [],
+  };
 }
 
 function normalizeStatus(value) {
@@ -146,7 +159,7 @@ async function loadMonitors() {
     return {
       id: String(id),
       name: String(monitor.friendlyName ?? monitor.name ?? monitor.url ?? 'Unnamed monitor'),
-      description: String(monitor.url ?? monitor.description ?? ''),
+      description: 'Availability and response-time monitoring.',
       status: normalizeStatus(monitor.status ?? monitor.state),
       latencyMs: numberOrNull(monitor.responseTime, monitor.averageResponseTime, monitor.response_time),
     };
