@@ -247,9 +247,18 @@ export default function Watch({ id, episode }: WatchProps) {
 
   const renderPill = (s: StreamSource, isActive: boolean, isDeadPill: boolean) => {
     const key = sourceKey(s);
-    const providerKey = providerPreferenceKey(s.server);
+    const providerKey = providerPreferenceKey(s.provider, s.server);
     const savedProvider = audio === 'dub' ? preferredDubProvider : preferredSubProvider;
     const isPreferred = Boolean(providerKey) && providerPreferenceKey(savedProvider) === providerKey;
+    const serverLabel = (s.server ?? '').replace(/^anivexa:/i, '');
+    const providerLabel = s.provider
+      ? s.provider.replace(/[-_]/g, ' ').replace(/\\b[a-z]/g, (letter) => letter.toUpperCase())
+      : '';
+    const showProvider = Boolean(providerLabel) &&
+      providerKey !== providerPreferenceKey(undefined, s.server);
+    const sourceLabel = showProvider
+      ? `${providerLabel} · ${serverLabel || 'Source'}`
+      : serverLabel || providerLabel || 'Source';
     return (
       <div key={key} className="flex items-center gap-1">
         <button
@@ -264,7 +273,7 @@ export default function Watch({ id, episode }: WatchProps) {
                 : 'bg-ink-850 text-zinc-400 ring-white/10 hover:text-zinc-100'
           }`}
         >
-          {s.server ?? 'Source'}
+          {sourceLabel}
           {s.quality && <span className="text-zinc-500">· {s.quality}</span>}
           {s.audio === 'sub' && <Badge variant="sub">Sub</Badge>}
           {s.audio === 'dub' && <Badge variant="dub">Dub</Badge>}
@@ -294,8 +303,8 @@ export default function Watch({ id, episode }: WatchProps) {
             }
             aria-label={
               isPreferred
-                ? `Remove preferred ${audio.toUpperCase()} provider: ${s.server}`
-                : `Remember ${s.server} for ${audio.toUpperCase()}`
+                ? `Remove preferred ${audio.toUpperCase()} provider: ${sourceLabel}`
+                : `Remember ${sourceLabel} for ${audio.toUpperCase()}`
             }
             className={`rounded-full px-2 py-1.5 text-[10px] ring-1 transition ${
               isPreferred
