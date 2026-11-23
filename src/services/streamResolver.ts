@@ -8,6 +8,9 @@ import type { AudioType, StreamSource, SubtitleTrack } from '@/types';
 // episode. The backend also caches provider results where appropriate.
 const streamCache = new Map<string, { at: number; value: ResolvedStreams }>();
 const CACHE_TTL_MS = 10 * 60_000;
+// Partial provider responses are useful, but should not hide recovered providers
+// for the same ten-minute window as a complete result.
+const PARTIAL_CACHE_TTL_MS = 2 * 60_000;
 
 /** Fired when background stream verification changes source ordering/status. */
 export const streamUpdates = new EventTarget();
@@ -21,6 +24,18 @@ export interface ResolvedStreams {
 
 const errMsg = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+/** Invalidate one discovery result so an explicit refresh reaches the API. */
+export function invalidateStreamCache(
+  animeId: number | string,
+  episode: number,
+  audio: AudioType = 'sub',
+  isAdult?: boolean,
+): void {
+  streamCache.delete(
+    `${animeId}|${episode}|${audio}|${isAdult === true ? 'a' : 'n'}`,
+  );
+}
 
 /** Normalize provider names for saved provider preferences. */
 export function providerPreferenceKey(provider?: string, server?: string): string {
@@ -191,7 +206,10 @@ export async function resolveStreams(
 ): Promise<ResolvedStreams> {
   const key = `${animeId}|${episode}|${audio}|${isAdult === true ? 'a' : 'n'}`;
   const hit = streamCache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+  const cacheTtl = hit && hit.value.errors.length > 0
+    ? PARTIAL_CACHE_TTL_MS
+    : CACHE_TTL_MS;
+  if (hit && Date.now() - hit.at < cacheTtl) {
     const value = hit.value;
     return {
       streams: [...value.streams],
@@ -203,9 +221,9 @@ export async function resolveStreams(
 
   const value = await resolveStreamsInner(animeId, episode, audio, title, isAdult);
 
-  // Cache only successful discovery results. Empty results are often transient
-  // (providers can time out or recover on a later request); caching them for
-  // ten minutes made F5 appear to "fix" playback by clearing the in-memory cache.
+  // Cache non-empty results, but keep partial results for less time: upstream
+  // providers can recover between requests, and a partial success must not
+  // suppress another discovery attempt for the full ten-minute cache window.
   if (value.streams.length > 0) {
     streamCache.set(key, { at: Date.now(), value });
   } else {

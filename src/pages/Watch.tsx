@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Layers, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Layers, LoaderCircle, RefreshCw } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import VideoPlayer from '@/components/player/VideoPlayer';
 import TorrentPanel from '@/components/player/TorrentPanel';
@@ -11,7 +11,7 @@ import Badge from '@/components/ui/Badge';
 import Skeleton from '@/components/ui/Skeleton';
 import ErrorState from '@/components/ui/ErrorState';
 import Disclaimer from '@/components/ui/Disclaimer';
-import { providerPreferenceKey, resolveStreams, streamUpdates } from '@/services/streamResolver';
+import { invalidateStreamCache, providerPreferenceKey, resolveStreams, streamUpdates } from '@/services/streamResolver';
 import { fetchAnimeInfo } from '@/services/info';
 import { api } from '@/services/api';
 import { useApi } from '@/hooks/useApi';
@@ -102,7 +102,13 @@ export default function Watch({ id, episode }: WatchProps) {
     [id, epNum, audio, info.data?.title, info.data?.isAdult, epAired, infoLoaded],
   );
 
-  const allSources = streams.data?.streams ?? [];
+  // Probe verdicts mutate the cached source objects. A revision forces React
+  // to re-read those objects without re-running provider discovery.
+  const [probeRevision, setProbeRevision] = useState(0);
+  const allSources = useMemo(
+    () => streams.data?.streams ?? [],
+    [streams.data, probeRevision],
+  );
 
   // The selection is keyed by SOURCE IDENTITY, not list index: providers
   // merge in the background and probes re-sort the list, which used to
@@ -134,14 +140,21 @@ export default function Watch({ id, episode }: WatchProps) {
     setFailedKeys((prev) => new Set(prev).add(key));
   };
 
-  // Late providers merge into the result in the background — reload on their
-  // update event so the Sources list grows without a manual refresh.
-  const reloadRef = useRef(streams.reload);
-  reloadRef.current = streams.reload;
+  // An explicit refresh bypasses the session cache. Keep the current source
+  // selected when possible; only reset old probe failures before rediscovery.
+  const refreshStreams = () => {
+    invalidateStreamCache(id, epNum, audio, info.data?.isAdult);
+    setFailedKeys(new Set());
+    streams.reload();
+  };
+
+  // Background verification changes source status/order, not provider
+  // discovery. Re-render from the mutated cached objects without another API
+  // request (which could otherwise replace a good result with a partial one).
   useEffect(() => {
     const onUpdate = (e: Event) => {
       if ((e as CustomEvent<string>).detail === `${id}|${epNum}|${audio}`) {
-        reloadRef.current();
+        setProbeRevision((revision) => revision + 1);
       }
     };
     streamUpdates.addEventListener('update', onUpdate);
@@ -412,11 +425,7 @@ export default function Watch({ id, episode }: WatchProps) {
                   : 'No playable source was returned. Check the diagnostic details below or retry.'
             }
             details={streams.data.errors}
-            onRetry={() => {
-              setFailedKeys(new Set());
-              setActiveKey(null);
-              streams.reload();
-            }}
+            onRetry={refreshStreams}
           />
         ) : null
       ) : (
@@ -424,11 +433,7 @@ export default function Watch({ id, episode }: WatchProps) {
           title="No playable stream found"
           message="Every source failed. Retry, or try the torrent fallback below."
           details={streams.data?.errors}
-          onRetry={() => {
-            setFailedKeys(new Set());
-            setActiveKey(null);
-            streams.reload();
-          }}
+          onRetry={refreshStreams}
         />
       )}
 
@@ -558,11 +563,22 @@ export default function Watch({ id, episode }: WatchProps) {
                 Choose a source, then press Remember to prefer its provider for future {audio.toUpperCase()} episodes. Press Preferred again to clear it.
               </p>
             </div>
-            {dead.length > 0 && (
-              <span className="text-xs text-zinc-600">
-                {dead.length} unresponsive
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {dead.length > 0 && (
+                <span className="text-xs text-zinc-600">
+                  {dead.length} unresponsive
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshStreams}
+                disabled={streams.loading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${streams.loading ? 'animate-spin' : ''}`} />
+                {streams.loading ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
           </div>
           {live.length === 0 ? (
             <p className="py-4 text-sm text-zinc-500">
