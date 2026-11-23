@@ -38,6 +38,9 @@ function unwrapStatusPayload(payload) {
     services: Array.isArray(payload.services)
       ? payload.services.map((service) => ({
           ...service,
+          name: /^https?:\/\//i.test(String(service.name ?? ''))
+            ? 'Monitored service'
+            : service.name,
           description: 'Availability and response-time monitoring.',
         }))
       : [],
@@ -158,7 +161,7 @@ async function loadMonitors() {
 
     return {
       id: String(id),
-      name: String(monitor.friendlyName ?? monitor.name ?? monitor.url ?? 'Unnamed monitor'),
+      name: String(monitor.friendlyName ?? monitor.name ?? 'Monitored service'),
       description: 'Availability and response-time monitoring.',
       status: normalizeStatus(monitor.status ?? monitor.state),
       latencyMs: numberOrNull(monitor.responseTime, monitor.averageResponseTime, monitor.response_time),
