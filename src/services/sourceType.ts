@@ -134,6 +134,8 @@ export function subtitleFormat(raw: string): 'ass' | 'srt' | 'vtt' {
  * can positively identify a non-video page.
  *
  * HTTP 200 alone is never proof: a webpage returns 200 too.
+ * HLS 403/429/5xx responses are inconclusive: upstream protection and transient
+ * failures can recover. Only 404/410 are treated as a definite missing resource.
  */
 export function mediaResponseVerdict(
   kind: SourceKind,
@@ -144,11 +146,14 @@ export function mediaResponseVerdict(
   if (kind === 'embed') return undefined; // a frame's status says nothing about playback
   if (kind === 'unknown') return false;
   if (status === 405 || status === 501) return undefined;
-  // MP4 is played directly, while the probe is sent through a proxy. An HTTP
-  // failure from that proxy is inconclusive, unlike an HLS failure (which uses
-  // the same proxy pipeline as playback).
+  // A missing HLS resource is a conclusive negative. Other HTTP failures
+  // (including 401/403, rate limits and 5xx) can be transient or caused by
+  // upstream anti-bot/proxy behavior, so don't hide the source on that basis.
+  if (kind === 'hls' && (status === 404 || status === 410)) return false;
+  // MP4 is played directly, while probes use a proxy; proxy failures do not
+  // establish that direct playback is unavailable.
   if (kind === 'mp4' && (status < 200 || status >= 300)) return undefined;
-  if (status < 200 || status >= 300) return false;
+  if (status < 200 || status >= 300) return undefined;
   const ct = (contentType ?? '').toLowerCase();
   if (kind === 'hls') return typeof body === 'string' && body.includes('#EXTM3U');
   // mp4: an HTML/JSON/text body means a webpage or error page, not a video

@@ -10,6 +10,8 @@ import type {
   Paged,
   ProviderStatus,
   SpotlightAnime,
+  StreamSource,
+  SubtitleTrack,
 } from '@/types';
 
 /** Hosted KitaWatch API. Override at build time for local development. */
@@ -18,6 +20,20 @@ const API_BASE_URL = (
 )?.trim().replace(/\/+$/, '') || 'https://api.kitawatch.free.nf';
 
 const DEFAULT_TIMEOUT_MS = 12_000;
+// Leave headroom for the central API's bounded 45-second provider aggregation.
+const WATCH_TIMEOUT_MS = 55_000;
+
+interface UnifiedWatchResponse {
+  anilistId: number;
+  episode: number;
+  audio: AudioType;
+  source: string;
+  streams: StreamSource[];
+  subtitles?: SubtitleTrack[];
+  errors?: string[];
+  providers?: Record<string, unknown>;
+  durationMs?: number;
+}
 
 export class ApiError extends Error {
   status?: number;
@@ -521,6 +537,18 @@ export const api = {
       e: episode,
       type: audio,
     }),
+  /** One KitaWatch API request for all configured playback discovery providers. */
+  watch: (
+    anilistId: number | string,
+    episode: number,
+    audio: AudioType = 'sub',
+    includeAnivexa = true,
+  ) =>
+    request<UnifiedWatchResponse>(
+      `/watch/${encodeURIComponent(String(anilistId))}/${episode}`,
+      { audio, include_anivexa: includeAnivexa },
+      WATCH_TIMEOUT_MS,
+    ),
   providersStatus: () => request<ProviderStatus>('/providers/status'),
 };
 

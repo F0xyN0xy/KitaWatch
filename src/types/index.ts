@@ -66,6 +66,9 @@ export interface StreamSource {
   type: 'hls' | 'mp4' | 'dash' | 'embed' | 'unknown';
   url: string;
   referer?: string;
+  /** Adapter that produced this stream (e.g. reanime, animegg, 2dhive). */
+  provider?: string;
+  /** Actual playback server label; kept separate from the adapter identity. */
   server?: string;
   audio?: 'sub' | 'dub';
   quality?: string;

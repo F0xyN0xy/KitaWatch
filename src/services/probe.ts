@@ -10,8 +10,9 @@ import { classifySourceKind, mediaResponseVerdict } from './sourceType';
  *
  * Path per type matches playback exactly:
  * - HLS is always routed through the local proxy (referer-locked hosts), so
- *   probe through proxy.m3u8 — a failure there is a guaranteed playback
- *   failure.
+ *   probe through proxy.m3u8. A valid manifest confirms availability; a 404/410
+ *   confirms a missing resource. Timeouts and other HTTP failures are
+ *   inconclusive because upstream protection and transient outages can recover.
  * - MP4 plays directly in <video> (no CORS needed for playback), so a probe
  *   failure via the proxy is inconclusive — the stream stays "unknown"
  *   rather than "dead".
@@ -55,7 +56,9 @@ async function probeOne(s: StreamSource): Promise<boolean | undefined> {
     const res = await fetchWithTimeout(proxy.cors(s.url), { method: 'HEAD' });
     return mediaResponseVerdict('mp4', res.status, res.headers.get('content-type'));
   } catch {
-    return kind === 'hls' ? false : undefined;
+    // A probe timeout/network error is not proof that the source is permanently
+    // dead. Keep it selectable and let the actual player determine playback.
+    return undefined;
   }
 }
 
@@ -67,7 +70,10 @@ export function probeStream(s: StreamSource): Promise<boolean | undefined> {
   let p = inflight.get(s.url);
   if (!p) {
     p = probeOne(s).then((ok) => {
-      cache.set(s.url, { at: Date.now(), ok });
+      // Cache only conclusive results. Inconclusive proxy errors/timeouts
+      // should be eligible for another probe on the next discovery.
+      if (ok !== undefined) cache.set(s.url, { at: Date.now(), ok });
+      else cache.delete(s.url);
       inflight.delete(s.url);
       return ok;
     });

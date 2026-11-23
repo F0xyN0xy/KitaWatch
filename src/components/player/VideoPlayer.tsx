@@ -383,7 +383,7 @@ function MediaPlayer({
         // allowlist), not /cors 窶・subtitle CDNs like dragonatepizza.online
         // rotate hosts exactly like segment CDNs do and would 403 on the
         // /cors allowlist.
-        for (const candidate of [sub.url, proxy.segment(sub.url)]) {
+        for (const candidate of [sub.url, proxy.segment(sub.url, source.referer ?? '')]) {
           try {
             const res = await fetch(candidate);
             if (res.ok) {
