@@ -48,7 +48,11 @@ function prioritize(streams: StreamSource[]): StreamSource[] {
         ? settings.preferredDubProvider
         : settings.preferredSubProvider,
     );
-    const matchesPreferred = Boolean(preferred) && provider === preferred;
+    // Keep preferences saved by older app versions working: those were
+    // keyed from the server label before adapter identity was available.
+    const legacyServerKey = providerPreferenceKey(undefined, stream.server);
+    const matchesPreferred = Boolean(preferred) &&
+      (provider === preferred || legacyServerKey === preferred);
     const server = (stream.server ?? '').toLowerCase();
     const adapter = (stream.provider ?? '').toLowerCase();
     const candidates = [
