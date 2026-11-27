@@ -217,7 +217,6 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
         content=out,
         media_type="application/vnd.apple.mpegurl",
         headers={
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         },
     )
@@ -294,7 +293,6 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
             content=out,
             media_type="application/vnd.apple.mpegurl",
             headers={
-                "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "no-cache",
             },
         )
@@ -304,7 +302,6 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
         headers={
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         },
     )
