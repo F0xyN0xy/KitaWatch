@@ -1,4 +1,7 @@
+import asyncio
+import ipaddress
 import re
+import socket
 from urllib.parse import quote, urlencode, urljoin, urlparse
 
 from curl_cffi.requests import AsyncSession
@@ -8,13 +11,15 @@ from fastapi.responses import JSONResponse, Response
 
 app = FastAPI()
 
-# CORS: any localhost origin may call us (the desktop app). Credentials are
-# never involved, so "*" is safe here.
+# Only the Tauri WebView and local Vite development server may read proxy
+# responses. This is defense-in-depth; URL validation below is the SSRF
+# boundary and must not rely on CORS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[],
+    allow_origin_regex=r"^(?:tauri://localhost|https?://(?:localhost|127\.0\.0\.1)(?::\d+)?|https?://tauri\.localhost)$",
+    allow_methods=["GET", "HEAD", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type", "Range"],
 )
 
 # Domains we are willing to fetch on behalf of the app. Suffix match.
@@ -97,19 +102,64 @@ def _headers(referer: str | None) -> dict[str, str]:
     return h
 
 
-async def _get(url: str, referer: str | None, timeout: float):
-    """One browser-impersonated GET. Raises on network errors.
+async def _validate_public_url(url: str) -> str:
+    """Reject non-HTTP URLs and any host resolving to a non-public IP."""
+    try:
+        parsed = urlparse(url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("Only public HTTP(S) URLs are allowed")
 
-    Tries the impersonation profiles newest-first: the installed curl_cffi
-    may not ship the newest profile, and older ones get flagged by
-    Cloudflare over time. An invalid profile name raises immediately, so
-    we can cheaply probe down the list.
+        host = parsed.hostname.rstrip(".").lower()
+        try:
+            literal_ip = ipaddress.ip_address(host)
+            addresses = [literal_ip]
+        except ValueError:
+            loop = asyncio.get_running_loop()
+            records = await loop.getaddrinfo(
+                host, parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+            addresses = [ipaddress.ip_address(record[4][0]) for record in records]
+
+        if not addresses or any(not address.is_global for address in addresses):
+            raise ValueError("Proxy target must resolve exclusively to public IP addresses")
+        return url
+    except (ValueError, OSError) as exc:
+        raise ValueError("Unsafe proxy target URL") from exc
+
+
+async def _get(url: str, referer: str | None, timeout: float, *, public_only: bool = False):
+    """Browser-impersonated GET with validated, manually followed redirects.
+
+    Public playback targets are resolved and checked before every hop. Redirect
+    handling is manual so a public endpoint cannot redirect the proxy to a
+    loopback, private, link-local, or otherwise non-public destination.
     """
     last_err: Exception | None = None
     for profile in BROWSER_PROFILES:
         try:
             async with AsyncSession(impersonate=profile, timeout=timeout) as client:
-                return await client.get(url, headers=_headers(referer))
+                current = url
+                for _ in range(6):
+                    if public_only:
+                        await _validate_public_url(current)
+                    response = await client.get(
+                        current,
+                        headers=_headers(referer),
+                        allow_redirects=False,
+                    )
+                    if response.status_code not in {301, 302, 303, 307, 308}:
+                        return response
+                    location = response.headers.get("location")
+                    if not location:
+                        return response
+                    current = urljoin(current, location)
+                raise ValueError("Too many upstream redirects")
         except Exception as e:
             last_err = e
             msg = str(e).lower()
@@ -139,7 +189,6 @@ async def cors(u: str = Query(...), ref: str | None = None, request: object = No
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
         headers={
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         },
     )
@@ -153,7 +202,7 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
     nested hosts faster than any list can track.
     """
     try:
-        r = await _get(url, referer, 30.0)
+        r = await _get(url, referer, 30.0, public_only=True)
     except Exception as e:
         print(f"[proxy error] {e}")
         return JSONResponse({"error": "proxy request failed"}, status_code=502)
@@ -168,7 +217,6 @@ async def proxy_m3u8(url: str = Query(...), referer: str | None = None):
         content=out,
         media_type="application/vnd.apple.mpegurl",
         headers={
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         },
     )
@@ -228,7 +276,7 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
     No host allowlist (see note above DEFAULT_ALLOWLIST).
     """
     try:
-        r = await _get(url, referer, 60.0)
+        r = await _get(url, referer, 60.0, public_only=True)
     except Exception as e:
         print(f"[proxy error] {e}")
         return JSONResponse({"error": "proxy request failed"}, status_code=502)
@@ -245,7 +293,6 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
             content=out,
             media_type="application/vnd.apple.mpegurl",
             headers={
-                "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "no-cache",
             },
         )
@@ -255,7 +302,6 @@ async def proxy_segment(url: str = Query(...), referer: str | None = None):
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
         headers={
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-cache",
         },
     )
@@ -275,7 +321,7 @@ async def fetch_url(u: str = Query(...), ref: str | None = None):
         content=r.content,
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
@@ -332,7 +378,7 @@ async def animepahe(
             content=r.content,
             status_code=r.status_code,
             media_type="application/json",
-            headers={"Access-Control-Allow-Origin": "*"},
+            headers={"Cache-Control": "no-cache"},
         )
     return JSONResponse({"error": last_err}, status_code=502)
 

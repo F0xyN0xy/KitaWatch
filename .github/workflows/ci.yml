@@ -40,6 +40,15 @@ jobs:
       - name: Build sidecars
         run: npm run build:sidecars
 
+      - name: Run proxy security tests
+        shell: bash
+        run: |
+          if [ -x proxy/.venv/bin/python3 ]; then
+            proxy/.venv/bin/python3 -m unittest discover -s proxy -p 'test_*.py'
+          else
+            proxy/.venv/Scripts/python.exe -m unittest discover -s proxy -p 'test_*.py'
+          fi
+
       - name: Check Rust app compiles
         run: cargo check
         working-directory: src-tauri
