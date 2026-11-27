@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import re
+import socket
 from urllib.parse import quote, urlencode, urljoin, urlparse
 
 from curl_cffi.requests import AsyncSession
@@ -16,7 +17,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[],
-    allow_origin_regex=r"^(?:tauri://localhost|https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?|https?://tauri\\.localhost)$",
+    allow_origin_regex=r"^(?:tauri://localhost|https?://(?:localhost|127\.0\.0\.1)(?::\d+)?|https?://tauri\.localhost)$",
     allow_methods=["GET", "HEAD", "OPTIONS"],
     allow_headers=["Accept", "Content-Type", "Range"],
 )
@@ -121,7 +122,7 @@ async def _validate_public_url(url: str) -> str:
             loop = asyncio.get_running_loop()
             records = await loop.getaddrinfo(
                 host, parsed.port or (443 if parsed.scheme == "https" else 80),
-                type=__import__("socket").SOCK_STREAM,
+                type=socket.SOCK_STREAM,
             )
             addresses = [ipaddress.ip_address(record[4][0]) for record in records]
 
