@@ -74,7 +74,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+// This API is a local desktop sidecar. Never expose it on every
+// network interface; only the KitaWatch process on this machine should reach it.
+server.listen(PORT, "127.0.0.1", () => {
   const addr = server.address();
   console.log(`Anivexa dev server → http://localhost:${PORT}`, addr);
   console.log(`node ${process.version} | platform ${process.platform} | execPath ${process.execPath}`);
